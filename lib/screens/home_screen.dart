@@ -1,17 +1,19 @@
-// dart:io → kelas File (untuk menampilkan foto dari path lokal).
-import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart'; // tipe Position dari stream GPS
-import 'package:image_picker/image_picker.dart'; // akses kamera sistem
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/allowed_zone.dart';
+import '../models/gps_mode.dart';
+import '../models/store.dart';
 import '../services/location_service.dart';
-import '../services/storage_service.dart';
-import 'settings_screen.dart';
+import '../services/store_service.dart';
+import 'camera_screen.dart';
+import 'history_screen.dart';
+import 'store_settings_screen.dart';
 
-/// Layar utama: tampilkan status zona + tombol kamera + foto terakhir.
-/// StatefulWidget karena UI berubah mengikuti GPS, izin, dan foto.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -20,272 +22,410 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  // Instance service (dibuat sekali, dipakai selama State hidup).
   final _locationService = LocationService();
-  final _storageService = StorageService();
-  final _imagePicker = ImagePicker();
+  final _storeService = StoreService();
+  final _nameController = TextEditingController();
 
-  // ---- State yang berubah (memicu rebuild lewat setState) ----
-  AllowedZone? _zone; // zona tersimpan (null = belum di-set)
-  File? _latestPhoto; // foto terakhir (null = belum ada). Cuma di memori.
-  bool _permissionGranted = false; // status izin lokasi
-  bool _loading = true; // true selama proses load awal
+  Store? _store;
+  bool _loading = true;
+  bool _permissionGranted = false;
 
-  /// Lifecycle: dipanggil sekali saat State dibuat.
+  Position? _latestPosition;
+  bool _isMocked = false;
+  StreamSubscription<Position>? _positionSub;
+
+  LatLng? _flexPosition;
+
   @override
   void initState() {
     super.initState();
-    // initState tidak boleh 'async', jadi kerjaan async dipisah ke _initialize.
     _initialize();
   }
 
-  /// Load awal: ambil zona tersimpan + minta izin lokasi.
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    _nameController.dispose();
+    super.dispose();
+  }
+
   Future<void> _initialize() async {
-    final zone = await _storageService.loadZone();
+    final prefs = await SharedPreferences.getInstance();
+    final store = await _storeService.loadStore();
+    final savedName = prefs.getString('employee_name') ?? '';
     final granted = await _locationService.ensurePermission();
-    // 'mounted' check: pastikan widget masih ada sebelum setState.
-    // Mencegah error kalau user keburu pindah layar saat await berjalan.
+
     if (!mounted) return;
+
+    _nameController.text = savedName;
+
+    if (granted) {
+      _positionSub = _locationService.positionStream().listen((pos) {
+        if (mounted) setState(() { _latestPosition = pos; _isMocked = pos.isMocked; });
+      });
+    }
+
     setState(() {
-      _zone = zone;
+      _store = store;
       _permissionGranted = granted;
       _loading = false;
+      if (store != null) _flexPosition = LatLng(store.lat, store.lng);
     });
   }
 
-  /// Buka layar Settings dan tunggu hasilnya (pattern push + await pop).
-  Future<void> _openSettings() async {
-    // push<AllowedZone> → kita berharap layar tujuan pop dengan AllowedZone.
-    final result = await Navigator.push<AllowedZone>(
+  Future<void> _reloadStore() async {
+    final store = await _storeService.loadStore();
+    if (mounted) setState(() {
+      _store = store;
+      if (store != null) _flexPosition = LatLng(store.lat, store.lng);
+    });
+  }
+
+  Future<void> _saveName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('employee_name', name);
+  }
+
+  bool get _isValid {
+    final store = _store;
+    if (store == null || _nameController.text.trim().isEmpty) return false;
+    switch (store.gpsMode) {
+      case GpsMode.flexible:
+        final flex = _flexPosition;
+        if (flex == null) return false;
+        return _locationService.isInsideZone(flex.latitude, flex.longitude, store);
+      case GpsMode.fixed:
+        final pos = _latestPosition;
+        if (pos == null) return false;
+        return _locationService.isInsideZone(pos.latitude, pos.longitude, store);
+      case GpsMode.antiFake:
+        final pos = _latestPosition;
+        if (pos == null || _isMocked) return false;
+        return _locationService.isInsideZone(pos.latitude, pos.longitude, store);
+    }
+  }
+
+  Future<void> _openCamera() async {
+    final store = _store!;
+    double lat, lng;
+    if (store.gpsMode == GpsMode.flexible) {
+      lat = _flexPosition!.latitude;
+      lng = _flexPosition!.longitude;
+    } else {
+      lat = _latestPosition!.latitude;
+      lng = _latestPosition!.longitude;
+    }
+    final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => SettingsScreen(initialZone: _zone),
+        builder: (_) => CameraScreen(
+          employeeName: _nameController.text.trim(),
+          lat: lat,
+          lng: lng,
+          store: store,
+          isMocked: _isMocked,
+        ),
       ),
     );
-    // result null = user kembali tanpa menekan Simpan.
-    if (result == null) return;
-    await _storageService.saveZone(result); // simpan ke disk
-    if (!mounted) return;
-    setState(() => _zone = result); // perbarui UI dengan zona baru
-  }
-
-  /// Buka kamera sistem, ambil foto, lalu tampilkan di Home.
-  Future<void> _takePhoto() async {
-    // pickImage return XFile? (null kalau user batal).
-    final photo = await _imagePicker.pickImage(source: ImageSource.camera);
-    if (photo == null) return;
-    if (!mounted) return;
-    // Bungkus path jadi File agar bisa dipakai Image.file().
-    setState(() => _latestPhoto = File(photo.path));
-  }
-
-  /// Tombol "Coba Lagi" saat izin lokasi ditolak: minta izin ulang.
-  Future<void> _retryPermission() async {
-    final granted = await _locationService.ensurePermission();
-    if (!mounted) return;
-    setState(() => _permissionGranted = granted);
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Absensi berhasil disimpan!'), backgroundColor: Colors.green),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lokagram'),
+        title: const Text('Absensi'),
         actions: [
-          // Ikon gear di kanan atas → buka Settings.
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
+            tooltip: 'Riwayat',
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: _openSettings,
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(
+                builder: (_) => StoreSettingsScreen(initialStore: _store),
+              ));
+              await _reloadStore();
+            },
+            tooltip: 'Pengaturan',
           ),
         ],
       ),
-      body: _buildBody(), // isi layar dipisah ke method agar rapi
+      body: _buildBody(),
     );
   }
 
-  /// Pilih isi body berdasar kondisi: loading → izin → konten utama.
   Widget _buildBody() {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (!_permissionGranted) {
-      return _PermissionDeniedCard(onRetry: _retryPermission);
-    }
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (!_permissionGranted) return _PermissionDeniedCard(
+      onRetry: () async {
+        final granted = await _locationService.ensurePermission();
+        if (mounted) setState(() => _permissionGranted = granted);
+      },
+    );
+    if (_store == null) return _NoStoreCard(
+      onSetup: () async {
+        await Navigator.push(context, MaterialPageRoute(
+          builder: (_) => const StoreSettingsScreen(initialStore: null),
+        ));
+        await _reloadStore();
+      },
+    );
+
+    final store = _store!;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch, // anak melebar penuh
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // StreamBuilder otomatis subscribe ke stream GPS dan rebuild
-          // setiap ada update posisi (real-time, tanpa polling manual).
-          StreamBuilder<Position>(
-            stream: _locationService.positionStream(),
-            builder: (context, snapshot) {
-              // snapshot membawa state stream: error / data / belum ada data.
-              if (snapshot.hasError) {
-                return _StatusCard.error('GPS error: ${snapshot.error}');
-              }
-              if (!snapshot.hasData) {
-                return const _StatusCard.loading();
-              }
-              // '!' = yakin tidak null (sudah dicek hasData di atas).
-              return _buildStatusAndCamera(snapshot.data!);
-            },
+          _buildNameCard(),
+          const SizedBox(height: 12),
+          _buildStoreCard(store),
+          const SizedBox(height: 12),
+          _buildLocationSection(store),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: _isValid ? _openCamera : null,
+            icon: const Icon(Icons.camera_alt),
+            label: const Text('Absen Sekarang'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
           ),
-          // Spread '...[]' = render daftar widget HANYA jika ada foto.
-          if (_latestPhoto != null) ...[
-            const SizedBox(height: 24),
-            const Text(
-              'Foto terakhir:',
-              style: TextStyle(fontWeight: FontWeight.w500),
+          if (!_isValid && _store != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _buildHint(store),
             ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8), // sudut membulat
-              child: Image.file(
-                _latestPhoto!,
-                height: 300,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  /// Bangun status card + tombol kamera berdasar posisi GPS saat ini.
-  Widget _buildStatusAndCamera(Position position) {
-    final zone = _zone;
-    // Belum ada zona → tampilkan empty state + tombol disabled.
-    if (zone == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const _StatusCard.empty(),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: null, // null = tombol nonaktif
-            icon: const Icon(Icons.camera_alt),
-            label: const Text('Ambil Foto'),
-          ),
-        ],
-      );
-    }
-    // Hitung jarak ke pusat zona → tentukan di dalam / di luar.
-    final distance = _locationService.distanceTo(position, zone);
-    final inZone = distance <= zone.radiusMeters;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _StatusCard.zone(
-          inZone: inZone,
-          distance: distance,
-          radius: zone.radiusMeters,
+  Widget _buildNameCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Row(
+          children: [
+            const Icon(Icons.person, color: Colors.grey),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  hintText: 'Masukkan nama karyawan',
+                  border: InputBorder.none,
+                ),
+                textInputAction: TextInputAction.done,
+                onChanged: _saveName,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        ElevatedButton.icon(
-          // Kamera hanya aktif kalau di dalam zona (ekspresi ternary).
-          onPressed: inZone ? _takePhoto : null,
-          icon: const Icon(Icons.camera_alt),
-          label: const Text('Ambil Foto'),
-          style: ElevatedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
+      ),
+    );
+  }
+
+  Widget _buildStoreCard(Store store) {
+    final modeColors = {
+      GpsMode.flexible: Colors.orange,
+      GpsMode.fixed: Colors.blue,
+      GpsMode.antiFake: Colors.green,
+    };
+    final color = modeColors[store.gpsMode]!;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.store, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(store.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  Text('Radius ${store.radiusMeters.toStringAsFixed(0)}m',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withOpacity(0.5)),
+              ),
+              child: Text(store.gpsMode.label,
+                  style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationSection(Store store) {
+    switch (store.gpsMode) {
+      case GpsMode.flexible:
+        return _buildFlexibleMap(store);
+      case GpsMode.fixed:
+        return _buildGpsStatusCard(store, showMockWarning: false);
+      case GpsMode.antiFake:
+        return _buildGpsStatusCard(store, showMockWarning: true);
+    }
+  }
+
+  Widget _buildFlexibleMap(Store store) {
+    final storeCenter = LatLng(store.lat, store.lng);
+    final flexPos = _flexPosition ?? storeCenter;
+    final inZone = _locationService.isInsideZone(flexPos.latitude, flexPos.longitude, store);
+
+    return Column(
+      children: [
+        _StatusCard(
+          icon: inZone ? Icons.check_circle : Icons.cancel,
+          color: inZone ? Colors.green : Colors.orange,
+          title: inZone ? 'Posisi di dalam zona' : 'Posisi di luar zona',
+          subtitle: 'Tap peta untuk memindahkan posisi Anda',
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: 260,
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: storeCenter,
+                initialZoom: 16,
+                onTap: (_, point) => setState(() => _flexPosition = point),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'io.grandepos.lokagram',
+                ),
+                CircleLayer(circles: [
+                  CircleMarker(
+                    point: storeCenter,
+                    radius: store.radiusMeters,
+                    useRadiusInMeter: true,
+                    color: Colors.blue.withOpacity(0.15),
+                    borderColor: Colors.blue,
+                    borderStrokeWidth: 2,
+                  ),
+                ]),
+                MarkerLayer(markers: [
+                  Marker(
+                    point: storeCenter,
+                    width: 36, height: 36,
+                    alignment: Alignment.topCenter,
+                    child: const Icon(Icons.store, color: Colors.blue, size: 36),
+                  ),
+                  Marker(
+                    point: flexPos,
+                    width: 36, height: 36,
+                    alignment: Alignment.topCenter,
+                    child: Icon(
+                      Icons.person_pin_circle,
+                      color: inZone ? Colors.green : Colors.red,
+                      size: 36,
+                    ),
+                  ),
+                ]),
+              ],
+            ),
           ),
         ),
       ],
     );
   }
+
+  Widget _buildGpsStatusCard(Store store, {required bool showMockWarning}) {
+    final pos = _latestPosition;
+    if (pos == null) {
+      return const _StatusCard(
+        icon: Icons.gps_not_fixed,
+        color: Colors.grey,
+        title: 'Mencari lokasi GPS...',
+        subtitle: 'Pastikan GPS aktif',
+      );
+    }
+    final distance = _locationService.distanceTo(pos.latitude, pos.longitude, store);
+    final inZone = distance <= store.radiusMeters;
+    return Column(
+      children: [
+        _StatusCard(
+          icon: inZone ? Icons.check_circle : Icons.cancel,
+          color: inZone ? Colors.green : Colors.red,
+          title: inZone ? 'Di dalam zona' : 'Di luar zona',
+          subtitle: 'Jarak: ${distance.toStringAsFixed(0)}m / radius ${store.radiusMeters.toStringAsFixed(0)}m',
+        ),
+        if (showMockWarning && _isMocked) ...[
+          const SizedBox(height: 8),
+          const _StatusCard(
+            icon: Icons.warning_amber,
+            color: Colors.red,
+            title: 'Fake GPS Terdeteksi!',
+            subtitle: 'Matikan aplikasi mock GPS untuk melanjutkan absensi',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildHint(Store store) {
+    if (_nameController.text.trim().isEmpty) {
+      return const Text('Masukkan nama karyawan terlebih dahulu',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey, fontSize: 12));
+    }
+    if (store.gpsMode == GpsMode.antiFake && _isMocked) {
+      return const Text('Nonaktifkan fake GPS untuk bisa absen',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.red, fontSize: 12));
+    }
+    return const Text('Pindahkan posisi ke dalam zona store',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.grey, fontSize: 12));
+  }
 }
 
-/// Widget kartu status yang dipakai ulang untuk semua kondisi.
-/// Privat ('_') = hanya bisa dipakai di file ini.
 class _StatusCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String title;
   final String? subtitle;
 
-  // Constructor utama.
-  const _StatusCard({
-    required this.icon,
-    required this.color,
-    required this.title,
-    this.subtitle,
-  });
-
-  // ---- Named constructors: "preset" untuk tiap kondisi ----
-  // Sintaks ': field = nilai' = initializer list (set field sebelum body).
-  const _StatusCard.loading()
-      : icon = Icons.gps_not_fixed,
-        color = Colors.grey,
-        title = 'Mencari lokasi...',
-        subtitle = null;
-
-  const _StatusCard.empty()
-      : icon = Icons.location_off,
-        color = Colors.orange,
-        title = 'Belum ada zona',
-        subtitle = 'Tap ⚙ Settings di pojok kanan atas untuk set lokasi';
-
-  const _StatusCard.error(String message)
-      : icon = Icons.error,
-        color = Colors.red,
-        title = 'Error',
-        subtitle = message;
-
-  /// Factory constructor: bisa berisi logika & memilih nilai sebelum return.
-  /// Di sini: pilih warna/ikon hijau (di dalam) vs merah (di luar).
-  factory _StatusCard.zone({
-    required bool inZone,
-    required double distance,
-    required double radius,
-  }) {
-    if (inZone) {
-      return _StatusCard(
-        icon: Icons.check_circle,
-        color: Colors.green,
-        title: 'Di dalam zona',
-        subtitle:
-            'Jarak: ${distance.toStringAsFixed(0)}m / radius ${radius.toStringAsFixed(0)}m',
-      );
-    }
-    return _StatusCard(
-      icon: Icons.cancel,
-      color: Colors.red,
-      title: 'Di luar zona',
-      subtitle:
-          'Jarak: ${distance.toStringAsFixed(0)}m / radius ${radius.toStringAsFixed(0)}m',
-    );
-  }
+  const _StatusCard({required this.icon, required this.color, required this.title, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2, // bayangan kartu
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
             Icon(icon, size: 40, color: color),
             const SizedBox(width: 16),
-            // Expanded → teks ambil sisa lebar (mencegah overflow).
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                    ),
-                  ),
-                  // Subtitle hanya dirender kalau tidak null.
+                  Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
                   if (subtitle != null) ...[
                     const SizedBox(height: 4),
-                    Text(subtitle!, style: const TextStyle(fontSize: 13)),
+                    Text(subtitle!, style: const TextStyle(fontSize: 13, color: Colors.grey)),
                   ],
                 ],
               ),
@@ -297,39 +437,57 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-/// Widget khusus saat izin lokasi ditolak: pesan + tombol coba lagi.
 class _PermissionDeniedCard extends StatelessWidget {
-  // VoidCallback = fungsi tanpa argumen & tanpa return (() -> void).
   final VoidCallback onRetry;
-
   const _PermissionDeniedCard({required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center, // pusatkan vertikal
-        children: [
-          const Icon(Icons.location_disabled, size: 80, color: Colors.orange),
-          const SizedBox(height: 16),
-          const Text(
-            'Izin Lokasi Dibutuhkan',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'App butuh izin akses lokasi untuk memantau posisi Anda. '
-            'Pastikan GPS aktif dan izinkan akses lokasi.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Coba Lagi'),
-          ),
-        ],
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_disabled, size: 64, color: Colors.orange),
+            const SizedBox(height: 16),
+            const Text('Izin Lokasi Dibutuhkan',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Aktifkan GPS dan izinkan akses lokasi untuk menggunakan fitur absensi.',
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Coba Lagi')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoStoreCard extends StatelessWidget {
+  final VoidCallback onSetup;
+  const _NoStoreCard({required this.onSetup});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.store, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('Store Belum Dikonfigurasi',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Set lokasi store terlebih dahulu sebelum karyawan bisa absen.',
+                textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(onPressed: onSetup, icon: const Icon(Icons.settings), label: const Text('Set Lokasi Store')),
+          ],
+        ),
       ),
     );
   }
