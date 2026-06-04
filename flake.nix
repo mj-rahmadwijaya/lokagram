@@ -35,6 +35,12 @@
   in {
     devShells.${system}.default = pkgs.mkShell {
       packages = [
+        # Ganti pkgs.flutter dengan versi spesifik kalau perlu pin:
+        # pkgs.flutter324  → 3.24.x
+        # pkgs.flutter327  → 3.27.x
+        # pkgs.flutter332  → 3.32.x
+        # pkgs.flutter338  → 3.38.x
+        # pkgs.flutter341  → 3.41.x (sama dengan pkgs.flutter saat ini)
         pkgs.flutter
         androidSdk
         pkgs.jdk17
