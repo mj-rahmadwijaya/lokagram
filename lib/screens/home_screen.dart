@@ -60,6 +60,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _nameController.text = savedName;
 
     if (granted) {
+      final lastPos = await _locationService.getLastKnownPosition();
+      if (lastPos != null && mounted) {
+        setState(() { _latestPosition = lastPos; _isMocked = lastPos.isMocked; });
+      }
       _positionSub = _locationService.positionStream().listen((pos) {
         if (mounted) setState(() { _latestPosition = pos; _isMocked = pos.isMocked; });
       });
@@ -413,6 +417,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       size: 36,
                     ),
                   ),
+                  if (_latestPosition != null)
+                    Marker(
+                      point: LatLng(_latestPosition!.latitude, _latestPosition!.longitude),
+                      width: 16,
+                      height: 16,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
                 ]),
               ],
             ),
@@ -425,59 +442,136 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildGpsStatusCard(Store store, {required bool showMockWarning}) {
     final pos = _latestPosition;
     if (pos == null) {
-      return Card(
-        elevation: 2,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              const SizedBox(
-                width: 40,
-                height: 40,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mencari sinyal GPS...',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      return Column(
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(strokeWidth: 3),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mencari sinyal GPS...',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Pastikan GPS aktif dan ada di area terbuka',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Pastikan GPS aktif dan ada di area terbuka',
-                      style: TextStyle(fontSize: 13, color: Colors.grey),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+          _buildPositionMap(store),
+        ],
       );
     }
     final distance = _locationService.distanceTo(pos.latitude, pos.longitude, store);
     final inZone = distance <= store.radiusMeters;
     return Column(
       children: [
-        _StatusCard(
-          icon: inZone ? Icons.check_circle : Icons.cancel,
-          color: inZone ? Colors.green : Colors.red,
-          title: inZone ? 'Di dalam zona' : 'Di luar zona',
-          subtitle: 'Jarak: ${distance.toStringAsFixed(0)}m / radius ${store.radiusMeters.toStringAsFixed(0)}m',
-        ),
-        if (showMockWarning && _isMocked) ...[
-          const SizedBox(height: 8),
+        if (showMockWarning && _isMocked)
           const _StatusCard(
             icon: Icons.warning_amber,
             color: Colors.red,
             title: 'Fake GPS Terdeteksi!',
             subtitle: 'Matikan aplikasi mock GPS untuk melanjutkan absensi',
+          )
+        else
+          _StatusCard(
+            icon: inZone ? Icons.check_circle : Icons.cancel,
+            color: inZone ? Colors.green : Colors.red,
+            title: inZone ? 'Di dalam zona' : 'Di luar zona',
+            subtitle: 'Jarak: ${distance.toStringAsFixed(0)}m / radius ${store.radiusMeters.toStringAsFixed(0)}m',
           ),
-        ],
+        const SizedBox(height: 8),
+        _buildPositionMap(store),
       ],
+    );
+  }
+
+  Widget _buildPositionMap(Store store) {
+    final storePos = LatLng(store.lat, store.lng);
+    final pos = _latestPosition;
+    final empPos = pos != null ? LatLng(pos.latitude, pos.longitude) : null;
+    final inZone = empPos != null &&
+        _locationService.isInsideZone(pos!.latitude, pos.longitude, store);
+
+    final mapOptions = empPos != null
+        ? MapOptions(
+            initialCameraFit: CameraFit.bounds(
+              bounds: LatLngBounds.fromPoints([storePos, empPos]),
+              padding: const EdgeInsets.all(60),
+              maxZoom: 17,
+            ),
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+          )
+        : MapOptions(
+            initialCenter: storePos,
+            initialZoom: 16,
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+          );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        height: 220,
+        child: FlutterMap(
+          options: mapOptions,
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'io.grandepos.lokagram',
+            ),
+            CircleLayer(circles: [
+              CircleMarker(
+                point: storePos,
+                radius: store.radiusMeters,
+                useRadiusInMeter: true,
+                color: Colors.blue.withOpacity(0.15),
+                borderColor: Colors.blue,
+                borderStrokeWidth: 2,
+              ),
+            ]),
+            MarkerLayer(markers: [
+              Marker(
+                point: storePos,
+                width: 36,
+                height: 36,
+                alignment: Alignment.topCenter,
+                child: const Icon(Icons.store, color: Colors.blue, size: 36),
+              ),
+              if (empPos != null)
+                Marker(
+                  point: empPos,
+                  width: 36,
+                  height: 36,
+                  alignment: Alignment.topCenter,
+                  child: Icon(
+                    Icons.person_pin_circle,
+                    color: inZone ? Colors.green : Colors.red,
+                    size: 36,
+                  ),
+                ),
+            ]),
+          ],
+        ),
+      ),
     );
   }
 

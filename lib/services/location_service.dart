@@ -14,6 +14,10 @@ class LocationService {
         permission == LocationPermission.whileInUse;
   }
 
+  Future<Position?> getLastKnownPosition() {
+    return Geolocator.getLastKnownPosition();
+  }
+
   Stream<Position> positionStream() {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
