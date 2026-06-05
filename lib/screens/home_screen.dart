@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Position? _latestPosition;
   bool _isMocked = false;
+  bool _gpsTimeout = false;
   StreamSubscription<Position>? _positionSub;
 
   LatLng? _flexPosition;
@@ -59,21 +60,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _nameController.text = savedName;
 
-    if (granted) {
-      final lastPos = await _locationService.getLastKnownPosition();
-      if (lastPos != null && mounted) {
-        setState(() { _latestPosition = lastPos; _isMocked = lastPos.isMocked; });
-      }
-      _positionSub = _locationService.positionStream().listen((pos) {
-        if (mounted) setState(() { _latestPosition = pos; _isMocked = pos.isMocked; });
-      });
-    }
+    if (granted) await _startLocationTracking();
 
     setState(() {
       _store = store;
       _permissionGranted = granted;
       _loading = false;
       if (store != null) _flexPosition = LatLng(store.lat, store.lng);
+    });
+  }
+
+  Future<void> _startLocationTracking() async {
+    await _positionSub?.cancel();
+    _positionSub = null;
+    if (mounted) setState(() { _latestPosition = null; _gpsTimeout = false; });
+
+    final lastPos = await _locationService.getLastKnownPosition();
+    if (lastPos != null && mounted) {
+      setState(() { _latestPosition = lastPos; _isMocked = lastPos.isMocked; });
+    }
+
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted && _latestPosition == null) setState(() => _gpsTimeout = true);
+    });
+
+    _locationService.getNetworkPosition().then((networkPos) {
+      if (networkPos != null && mounted && _latestPosition == null) {
+        setState(() { _latestPosition = networkPos; _isMocked = networkPos.isMocked; _gpsTimeout = false; });
+      }
+    });
+
+    _positionSub = _locationService.positionStream().listen((pos) {
+      if (mounted) setState(() { _latestPosition = pos; _isMocked = pos.isMocked; _gpsTimeout = false; });
     });
   }
 
@@ -225,7 +243,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_permissionGranted) return _PermissionDeniedCard(
       onRetry: () async {
         final granted = await _locationService.ensurePermission();
-        if (mounted) setState(() => _permissionGranted = granted);
+        if (!mounted) return;
+        setState(() => _permissionGranted = granted);
+        if (granted) await _startLocationTracking();
       },
     );
     if (_store == null) return _NoStoreCard(
@@ -444,38 +464,84 @@ class _HomeScreenState extends State<HomeScreen> {
     if (pos == null) {
       return Column(
         children: [
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          if (_gpsTimeout)
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    const Row(
                       children: [
-                        Text(
-                          'Mencari sinyal GPS...',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Pastikan GPS aktif dan ada di area terbuka',
-                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        Icon(Icons.gps_off, size: 40, color: Colors.orange),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'GPS Tidak Terdeteksi',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Pastikan GPS aktif dan berada di area terbuka',
+                                style: TextStyle(fontSize: 13, color: Colors.grey),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() => _gpsTimeout = false);
+                          _initialize();
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Coba Lagi'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(strokeWidth: 3),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Mencari sinyal GPS...',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Pastikan GPS aktif dan ada di area terbuka',
+                            style: TextStyle(fontSize: 13, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 8),
           _buildPositionMap(store),
         ],

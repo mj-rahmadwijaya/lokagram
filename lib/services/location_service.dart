@@ -18,6 +18,16 @@ class LocationService {
     return Geolocator.getLastKnownPosition();
   }
 
+  Future<Position?> getNetworkPosition() async {
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      ).timeout(const Duration(seconds: 4));
+    } catch (_) {
+      return null;
+    }
+  }
+
   Stream<Position> positionStream() {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
