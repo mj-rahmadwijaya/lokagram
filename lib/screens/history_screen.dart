@@ -120,6 +120,32 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
+void _openFullPhoto(BuildContext context, String photoPath) {
+  showDialog(
+    context: context,
+    builder: (dialogCtx) => Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(
+        children: [
+          Center(
+            child: InteractiveViewer(
+              child: Image.file(File(photoPath)),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(dialogCtx).padding.top + 8,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(dialogCtx),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _RecordCard extends StatelessWidget {
   final AttendanceRecord record;
   final String Function(DateTime) formatDateTime;
@@ -142,22 +168,40 @@ class _RecordCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: hasPhoto
-                  ? Image.file(
-                      File(record.photoPath!),
-                      width: 64,
-                      height: 64,
-                      fit: BoxFit.cover,
-                    )
-                  : Container(
-                      width: 64,
-                      height: 64,
-                      color: Colors.grey[200],
-                      child:
-                          const Icon(Icons.person, color: Colors.grey, size: 32),
-                    ),
+            GestureDetector(
+              onTap: hasPhoto
+                  ? () => _openFullPhoto(context, record.photoPath!)
+                  : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: hasPhoto
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Image.file(
+                            File(record.photoPath!),
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          ),
+                          Container(
+                            width: 64,
+                            height: 64,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.zoom_in, color: Colors.white, size: 20),
+                          ),
+                        ],
+                      )
+                    : Container(
+                        width: 64,
+                        height: 64,
+                        color: Colors.grey[200],
+                        child: const Icon(Icons.person, color: Colors.grey, size: 32),
+                      ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/gps_mode.dart';
@@ -26,6 +27,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
   late LatLng _pinPosition;
   late double _radius;
   late GpsMode _gpsMode;
+  bool _isLoadingLocation = false;
 
   @override
   void initState() {
@@ -51,6 +53,44 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
 
   void _onMapTap(TapPosition _, LatLng point) {
     setState(() => _pinPosition = point);
+  }
+
+  Future<void> _useMyLocation() async {
+    setState(() => _isLoadingLocation = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Aktifkan GPS terlebih dahulu')),
+          );
+        }
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Izin lokasi ditolak')),
+          );
+        }
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      final point = LatLng(position.latitude, position.longitude);
+      if (mounted) {
+        setState(() => _pinPosition = point);
+        _mapController.move(point, 16);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingLocation = false);
+    }
   }
 
   Future<void> _save() async {
@@ -163,45 +203,67 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
             ),
           ),
           Expanded(
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _pinPosition,
-                initialZoom: 16,
-                onTap: _onMapTap,
-              ),
+            child: Stack(
               children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'io.grandepos.lokagram',
-                ),
-                CircleLayer(
-                  circles: [
-                    CircleMarker(
-                      point: _pinPosition,
-                      radius: _radius,
-                      useRadiusInMeter: true,
-                      color: Colors.blue.withOpacity(0.15),
-                      borderColor: Colors.blue,
-                      borderStrokeWidth: 2,
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _pinPosition,
+                    initialZoom: 16,
+                    onTap: _onMapTap,
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'io.grandepos.lokagram',
+                    ),
+                    CircleLayer(
+                      circles: [
+                        CircleMarker(
+                          point: _pinPosition,
+                          radius: _radius,
+                          useRadiusInMeter: true,
+                          color: Colors.blue.withOpacity(0.15),
+                          borderColor: Colors.blue,
+                          borderStrokeWidth: 2,
+                        ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _pinPosition,
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.topCenter,
+                          child: const Icon(
+                            Icons.store,
+                            color: Colors.blue,
+                            size: 40,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _pinPosition,
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.topCenter,
-                      child: const Icon(
-                        Icons.store,
-                        color: Colors.blue,
-                        size: 40,
-                      ),
-                    ),
-                  ],
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: FloatingActionButton.small(
+                    onPressed: _isLoadingLocation ? null : _useMyLocation,
+                    tooltip: 'Gunakan lokasi saya',
+                    child: _isLoadingLocation
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.my_location),
+                  ),
                 ),
               ],
             ),

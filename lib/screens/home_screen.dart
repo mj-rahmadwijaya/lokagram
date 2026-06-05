@@ -106,6 +106,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openCamera() async {
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Icon(Icons.camera_front, size: 60, color: Theme.of(ctx).colorScheme.primary),
+            const SizedBox(height: 12),
+            const Text('Siap Absen?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              'Pastikan wajah terlihat jelas di kamera depan.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.pop(ctx, true),
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('Buka Kamera'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
     final store = _store!;
     double lat, lng;
     if (store.gpsMode == GpsMode.flexible) {
@@ -179,33 +234,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     final store = _store!;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildNameCard(),
-          const SizedBox(height: 12),
-          _buildStoreCard(store),
-          const SizedBox(height: 12),
-          _buildLocationSection(store),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _isValid ? _openCamera : null,
-            icon: const Icon(Icons.camera_alt),
-            label: const Text('Absen Sekarang'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildNameCard(),
+                const SizedBox(height: 12),
+                _buildStoreCard(store),
+                const SizedBox(height: 12),
+                _buildLocationSection(store),
+              ],
             ),
           ),
-          if (!_isValid && _store != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: _buildHint(store),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!_isValid && _store != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _buildHint(store),
+                  ),
+                ElevatedButton.icon(
+                  onPressed: _isValid ? _openCamera : null,
+                  icon: const Icon(Icons.camera_alt),
+                  label: const Text('Absen Sekarang'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -353,11 +425,37 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildGpsStatusCard(Store store, {required bool showMockWarning}) {
     final pos = _latestPosition;
     if (pos == null) {
-      return const _StatusCard(
-        icon: Icons.gps_not_fixed,
-        color: Colors.grey,
-        title: 'Mencari lokasi GPS...',
-        subtitle: 'Pastikan GPS aktif',
+      return Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mencari sinyal GPS...',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Pastikan GPS aktif dan ada di area terbuka',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
     final distance = _locationService.distanceTo(pos.latitude, pos.longitude, store);
