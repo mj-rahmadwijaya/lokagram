@@ -32,7 +32,13 @@ class _LoginScreenState extends State<LoginScreen> {
           description: Text('Email dan sandi tidak boleh kosong')));
       return;
     }
-    if (!email.contains('@')) {
+
+    // Dummy credentials untuk testing
+    const _dummyUser = 'test';
+    const _dummyPass = '123456';
+    final isDummy = email == _dummyUser && sandi == _dummyPass;
+
+    if (!isDummy && !email.contains('@')) {
       ShadToaster.of(context).show(const ShadToast.destructive(
           description: Text('Format email tidak valid')));
       return;
@@ -41,16 +47,24 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     await Future.delayed(const Duration(milliseconds: 700));
 
-    // Nama dari email (sebelum @)
-    final raw = email.split('@')[0].replaceAll(RegExp(r'[._]'), ' ');
-    final name = raw
-        .split(' ')
-        .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+    final String name;
+    final String savedEmail;
+    if (isDummy) {
+      name = 'Test';
+      savedEmail = 'test@grandepos.io';
+    } else {
+      // Nama dari email (sebelum @)
+      final raw = email.split('@')[0].replaceAll(RegExp(r'[._]'), ' ');
+      name = raw
+          .split(' ')
+          .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+          .join(' ');
+      savedEmail = email;
+    }
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_logged_in', true);
-    await prefs.setString('user_email', email);
+    await prefs.setString('user_email', savedEmail);
     await prefs.setString('employee_name', name);
 
     if (!mounted) return;
