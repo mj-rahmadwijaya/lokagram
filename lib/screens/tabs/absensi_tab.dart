@@ -80,14 +80,21 @@ class _AbsensiTabState extends State<AbsensiTab> {
     }
   }
 
+  Future<bool> _isFakeGpsSimulated() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('dev_fake_gps') ?? false;
+  }
+
   Future<void> _startTracking() async {
     await _posSub?.cancel();
     _posSub = null;
     if (mounted) setState(() { _position = null; _gpsTimeout = false; });
 
+    final simFake = await _isFakeGpsSimulated();
+
     final last = await _locService.getLastKnownPosition();
     if (last != null && mounted) {
-      setState(() { _position = last; _isMocked = last.isMocked; });
+      setState(() { _position = last; _isMocked = simFake || last.isMocked; });
     }
 
     Future.delayed(const Duration(seconds: 8), () {
@@ -96,12 +103,12 @@ class _AbsensiTabState extends State<AbsensiTab> {
 
     _locService.getNetworkPosition().then((p) {
       if (p != null && mounted && _position == null) {
-        setState(() { _position = p; _isMocked = p.isMocked; _gpsTimeout = false; });
+        setState(() { _position = p; _isMocked = simFake || p.isMocked; _gpsTimeout = false; });
       }
     });
 
     _posSub = _locService.positionStream().listen((p) {
-      if (mounted) setState(() { _position = p; _isMocked = p.isMocked; _gpsTimeout = false; });
+      if (mounted) setState(() { _position = p; _isMocked = simFake || p.isMocked; _gpsTimeout = false; });
     });
   }
 

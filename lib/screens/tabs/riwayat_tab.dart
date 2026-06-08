@@ -41,11 +41,30 @@ class _RiwayatTabState extends State<RiwayatTab> {
     });
   }
 
-  List<AttendanceRecord> get _filtered => _all
-      .where((r) =>
-          r.timestamp.month == _selectedMonth.month &&
-          r.timestamp.year == _selectedMonth.year)
-      .toList();
+  // Semua hari di bulan yang dipilih sampai hari ini
+  List<DateTime> get _daysInMonth {
+    final now = DateTime.now();
+    final lastDay = (_selectedMonth.year == now.year &&
+            _selectedMonth.month == now.month)
+        ? now.day
+        : DateUtils.getDaysInMonth(
+            _selectedMonth.year, _selectedMonth.month);
+    return List.generate(
+      lastDay,
+      (i) => DateTime(_selectedMonth.year, _selectedMonth.month, i + 1),
+    ).reversed.toList();
+  }
+
+  AttendanceRecord? _recordForDay(DateTime day) {
+    try {
+      return _all.firstWhere((r) =>
+          r.timestamp.year == day.year &&
+          r.timestamp.month == day.month &&
+          r.timestamp.day == day.day);
+    } catch (_) {
+      return null;
+    }
+  }
 
   void _prevMonth() => setState(() {
         _selectedMonth =
@@ -114,10 +133,12 @@ class _RiwayatTabState extends State<RiwayatTab> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filtered;
-    final hadirCount = filtered.length;
-    final tepatCount = filtered.where((r) => r.isInsideZone).length;
-    final luarCount = filtered.where((r) => !r.isInsideZone).length;
+    final days = _daysInMonth;
+    final hadirCount = days.where((d) => _recordForDay(d) != null).length;
+    final tidakHadirCount = days.where((d) => _recordForDay(d) == null).length;
+    final luarCount = days
+        .where((d) => _recordForDay(d)?.isInsideZone == false)
+        .length;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -182,19 +203,19 @@ class _RiwayatTabState extends State<RiwayatTab> {
                   child: Row(
                     children: [
                       _StatChip(
-                          label: 'Total',
+                          label: 'Hadir',
                           value: '$hadirCount',
-                          color: const Color(0xFF1976D2)),
+                          color: const Color(0xFF43A047)),
                       const SizedBox(width: 10),
                       _StatChip(
-                          label: 'Dalam Zona',
-                          value: '$tepatCount',
-                          color: const Color(0xFF43A047)),
+                          label: 'Tdk Hadir',
+                          value: '$tidakHadirCount',
+                          color: const Color(0xFFFF7043)),
                       const SizedBox(width: 10),
                       _StatChip(
                           label: 'Luar Zona',
                           value: '$luarCount',
-                          color: const Color(0xFFFF7043)),
+                          color: const Color(0xFF1976D2)),
                     ],
                   ),
                 ),
@@ -203,7 +224,7 @@ class _RiwayatTabState extends State<RiwayatTab> {
 
                 // List
                 Expanded(
-                  child: filtered.isEmpty
+                  child: days.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -222,16 +243,17 @@ class _RiwayatTabState extends State<RiwayatTab> {
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(
                               16, 4, 16, 20),
-                          itemCount: filtered.length,
+                          itemCount: days.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 10),
                           itemBuilder: (_, i) {
-                            final r = filtered[i];
+                            final day = days[i];
+                            final r = _recordForDay(day);
                             return _RiwayatCard(
                               record: r,
-                              tanggal: _formatTanggal(r.timestamp),
-                              masuk: _formatWaktu(r.timestamp),
-                              modeColor: _modeColor(r.gpsMode),
+                              tanggal: _formatTanggal(day),
+                              masuk: r != null ? _formatWaktu(r.timestamp) : null,
+                              modeColor: r != null ? _modeColor(r.gpsMode) : Colors.grey,
                             );
                           },
                         ),
@@ -281,9 +303,9 @@ class _StatChip extends StatelessWidget {
 }
 
 class _RiwayatCard extends StatelessWidget {
-  final AttendanceRecord record;
+  final AttendanceRecord? record;
   final String tanggal;
-  final String masuk;
+  final String? masuk;
   final Color modeColor;
 
   const _RiwayatCard({
@@ -295,7 +317,8 @@ class _RiwayatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final inZone = record.isInsideZone;
+    final hadir = record != null;
+    final inZone = record?.isInsideZone ?? false;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -311,81 +334,107 @@ class _RiwayatCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Tanggal
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(tanggal,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: Color(0xFF1A1A2E))),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.login_rounded,
-                      size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  Text(masuk,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF43A047))),
-                  const SizedBox(width: 12),
-                  const Icon(Icons.logout_rounded,
-                      size: 14, color: Colors.grey),
-                  const SizedBox(width: 4),
-                  const Text('-',
-                      style: TextStyle(
-                          fontSize: 13, color: Colors.grey)),
-                ],
-              ),
-            ],
+          // Indikator hadir/tidak hadir
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: hadir
+                  ? const Color(0xFFE8F5E9)
+                  : const Color(0xFFFCE4EC),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              hadir ? Icons.check_rounded : Icons.close_rounded,
+              color: hadir
+                  ? const Color(0xFF43A047)
+                  : const Color(0xFFE53935),
+              size: 22,
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 12),
+          // Tanggal & jam
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tanggal,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        color: Color(0xFF1A1A2E))),
+                const SizedBox(height: 4),
+                if (hadir)
+                  Row(
+                    children: [
+                      const Icon(Icons.login_rounded,
+                          size: 13, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(masuk!,
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF43A047))),
+                    ],
+                  )
+                else
+                  Text('Tidak Hadir',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey[400])),
+              ],
+            ),
+          ),
+          // Badge status
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Status in zone
               Container(
                 padding: const EdgeInsets.symmetric(
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: inZone
-                      ? const Color(0xFFE8F5E9)
-                      : const Color(0xFFFBE9E7),
+                  color: hadir
+                      ? (inZone
+                          ? const Color(0xFFE8F5E9)
+                          : const Color(0xFFFBE9E7))
+                      : const Color(0xFFFCE4EC),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  inZone ? 'Dalam Zona' : 'Luar Zona',
+                  hadir
+                      ? (inZone ? 'Dalam Zona' : 'Luar Zona')
+                      : 'Absen',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: inZone
-                          ? const Color(0xFF43A047)
-                          : const Color(0xFFFF7043)),
+                      color: hadir
+                          ? (inZone
+                              ? const Color(0xFF43A047)
+                              : const Color(0xFFFF7043))
+                          : const Color(0xFFE53935)),
                 ),
               ),
-              const SizedBox(height: 6),
-              // GPS mode
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: modeColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                      color: modeColor.withValues(alpha: 0.3)),
+              if (hadir) ...[
+                const SizedBox(height: 6),
+                // GPS mode
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: modeColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                        color: modeColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    record!.gpsMode.label,
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        color: modeColor),
+                  ),
                 ),
-                child: Text(
-                  record.gpsMode.label,
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: modeColor),
-                ),
-              ),
-              if (record.isMocked) ...[
+              ],
+              if (record?.isMocked == true) ...[
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(

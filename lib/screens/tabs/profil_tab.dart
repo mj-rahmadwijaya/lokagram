@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../login_screen.dart';
+import '../fake_gps_screen.dart';
 import '../store_settings_screen.dart';
 
 class ProfilTab extends StatefulWidget {
@@ -169,6 +170,15 @@ class _ProfilTabState extends State<ProfilTab> {
                       MaterialPageRoute(
                           builder: (_) =>
                               const StoreSettingsScreen(initialStore: null)),
+                    ),
+                  ),
+                  _MenuRow(
+                    icon: Icons.gps_off_rounded,
+                    label: 'Fake GPS (Test)',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const FakeGpsScreen()),
                     ),
                   ),
                   _MenuRow(
