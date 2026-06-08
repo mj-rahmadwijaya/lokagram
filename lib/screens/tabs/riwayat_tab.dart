@@ -7,10 +7,10 @@ class RiwayatTab extends StatefulWidget {
   const RiwayatTab({super.key});
 
   @override
-  State<RiwayatTab> createState() => _RiwayatTabState();
+  State<RiwayatTab> createState() => RiwayatTabState();
 }
 
-class _RiwayatTabState extends State<RiwayatTab> {
+class RiwayatTabState extends State<RiwayatTab> {
   final _service = AttendanceService();
   List<AttendanceRecord> _all = [];
   bool _loading = true;
@@ -40,6 +40,8 @@ class _RiwayatTabState extends State<RiwayatTab> {
       _loading = false;
     });
   }
+
+  void reload() => _load();
 
   // Semua hari di bulan yang dipilih sampai hari ini
   List<DateTime> get _daysInMonth {
@@ -136,9 +138,6 @@ class _RiwayatTabState extends State<RiwayatTab> {
     final days = _daysInMonth;
     final hadirCount = days.where((d) => _recordForDay(d) != null).length;
     final tidakHadirCount = days.where((d) => _recordForDay(d) == null).length;
-    final luarCount = days
-        .where((d) => _recordForDay(d)?.isInsideZone == false)
-        .length;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -208,14 +207,9 @@ class _RiwayatTabState extends State<RiwayatTab> {
                           color: const Color(0xFF43A047)),
                       const SizedBox(width: 10),
                       _StatChip(
-                          label: 'Tdk Hadir',
+                          label: 'Tidak Hadir',
                           value: '$tidakHadirCount',
                           color: const Color(0xFFFF7043)),
-                      const SizedBox(width: 10),
-                      _StatChip(
-                          label: 'Luar Zona',
-                          value: '$luarCount',
-                          color: const Color(0xFF1976D2)),
                     ],
                   ),
                 ),

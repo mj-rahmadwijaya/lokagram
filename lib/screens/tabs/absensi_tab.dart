@@ -19,10 +19,10 @@ class AbsensiTab extends StatefulWidget {
   const AbsensiTab({super.key, required this.onRiwayat});
 
   @override
-  State<AbsensiTab> createState() => _AbsensiTabState();
+  State<AbsensiTab> createState() => AbsensiTabState();
 }
 
-class _AbsensiTabState extends State<AbsensiTab> {
+class AbsensiTabState extends State<AbsensiTab> {
   final _locService = LocationService();
   final _storeService = StoreService();
   final _nameCtrl = TextEditingController();
@@ -34,6 +34,12 @@ class _AbsensiTabState extends State<AbsensiTab> {
   bool _isMocked = false;
   bool _gpsTimeout = false;
   StreamSubscription<Position>? _posSub;
+  StreamSubscription<ServiceStatus>? _serviceSub;
+
+  // Fake GPS
+  bool _fakeGpsEnabled = false;
+  double _fakeLat = -6.2088;
+  double _fakeLng = 106.8456;
 
   // Clock
   Timer? _clockTimer;
@@ -54,14 +60,44 @@ class _AbsensiTabState extends State<AbsensiTab> {
     _clockTimer = Timer.periodic(
         const Duration(seconds: 1),
         (_) { if (mounted) setState(() => _now = DateTime.now()); });
+    // Listen GPS service — mulai tracking otomatis saat GPS dinyalakan
+    _serviceSub = Geolocator.getServiceStatusStream().listen((status) {
+      if (status == ServiceStatus.enabled && mounted) {
+        _refreshFakeGps().then((_) => _startTracking());
+      }
+    });
   }
 
   @override
   void dispose() {
     _posSub?.cancel();
+    _serviceSub?.cancel();
     _clockTimer?.cancel();
     _nameCtrl.dispose();
     super.dispose();
+  }
+
+  // Dipanggil MainScreen setiap kali tab Absensi dipilih
+  Future<void> refresh() async {
+    await _refreshFakeGps();
+    // Restart tracking agar posisi terbaru diambil
+    final granted = await _locService.ensurePermission()
+        .timeout(const Duration(seconds: 3), onTimeout: () => false);
+    if (granted && mounted) _startTracking();
+  }
+
+  Future<void> _refreshFakeGps() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _fakeGpsEnabled = prefs.getBool('dev_fake_gps') ?? false;
+      _fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
+      _fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
+      // Update isMocked jika posisi sudah ada
+      if (_position != null) {
+        _isMocked = _fakeGpsEnabled || _position!.isMocked;
+      }
+    });
   }
 
   Future<void> _initialize() async {
@@ -69,20 +105,24 @@ class _AbsensiTabState extends State<AbsensiTab> {
       final prefs = await SharedPreferences.getInstance();
       final store = await _storeService.loadStore();
       final savedName = prefs.getString('employee_name') ?? '';
+      final fakeEnabled = prefs.getBool('dev_fake_gps') ?? false;
+      final fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
+      final fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
       final granted = await _locService.ensurePermission()
           .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (!mounted) return;
       _nameCtrl.text = savedName;
-      setState(() { _store = store; _loading = false; });
-      if (granted) _startTracking(); // tidak di-await agar tidak blokir UI
+      setState(() {
+        _store = store;
+        _fakeGpsEnabled = fakeEnabled;
+        _fakeLat = fakeLat;
+        _fakeLng = fakeLng;
+        _loading = false;
+      });
+      if (granted) _startTracking();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
-  }
-
-  Future<bool> _isFakeGpsSimulated() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('dev_fake_gps') ?? false;
   }
 
   Future<void> _startTracking() async {
@@ -90,11 +130,9 @@ class _AbsensiTabState extends State<AbsensiTab> {
     _posSub = null;
     if (mounted) setState(() { _position = null; _gpsTimeout = false; });
 
-    final simFake = await _isFakeGpsSimulated();
-
     final last = await _locService.getLastKnownPosition();
     if (last != null && mounted) {
-      setState(() { _position = last; _isMocked = simFake || last.isMocked; });
+      setState(() { _position = last; _isMocked = _fakeGpsEnabled || last.isMocked; });
     }
 
     Future.delayed(const Duration(seconds: 8), () {
@@ -103,12 +141,12 @@ class _AbsensiTabState extends State<AbsensiTab> {
 
     _locService.getNetworkPosition().then((p) {
       if (p != null && mounted && _position == null) {
-        setState(() { _position = p; _isMocked = simFake || p.isMocked; _gpsTimeout = false; });
+        setState(() { _position = p; _isMocked = _fakeGpsEnabled || p.isMocked; _gpsTimeout = false; });
       }
     });
 
     _posSub = _locService.positionStream().listen((p) {
-      if (mounted) setState(() { _position = p; _isMocked = simFake || p.isMocked; _gpsTimeout = false; });
+      if (mounted) setState(() { _position = p; _isMocked = _fakeGpsEnabled || p.isMocked; _gpsTimeout = false; });
     });
   }
 
@@ -117,13 +155,16 @@ class _AbsensiTabState extends State<AbsensiTab> {
     if (mounted) setState(() => _store = store);
   }
 
+  double get _effectiveLat => _fakeGpsEnabled ? _fakeLat : (_position?.latitude ?? 0);
+  double get _effectiveLng => _fakeGpsEnabled ? _fakeLng : (_position?.longitude ?? 0);
+  bool get _hasPosition => _fakeGpsEnabled || _position != null;
+
   bool get _isValid {
     final store = _store;
     if (store == null) return false;
-    final pos = _position;
-    if (pos == null) return false;
+    if (!_hasPosition) return false;
     if (store.gpsMode == GpsMode.antiFake && _isMocked) return false;
-    return _locService.isInsideZone(pos.latitude, pos.longitude, store);
+    return _locService.isInsideZone(_effectiveLat, _effectiveLng, store);
   }
 
   Future<void> _checkIn() async {
@@ -190,14 +231,13 @@ class _AbsensiTabState extends State<AbsensiTab> {
     if (confirmed != true || !mounted) return;
 
     final store = _store!;
-    final pos = _position!;
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => CameraScreen(
           employeeName: _nameCtrl.text.trim(),
-          lat: pos.latitude,
-          lng: pos.longitude,
+          lat: _effectiveLat,
+          lng: _effectiveLng,
           store: store,
           isMocked: _isMocked,
         ),
@@ -305,8 +345,9 @@ class _AbsensiTabState extends State<AbsensiTab> {
     }
 
     final storePos = LatLng(store.lat, store.lng);
-    final empPos =
-        pos != null ? LatLng(pos.latitude, pos.longitude) : null;
+    final empPos = _hasPosition
+        ? LatLng(_effectiveLat, _effectiveLng)
+        : (pos != null ? LatLng(pos.latitude, pos.longitude) : null);
 
     final mapOptions = empPos != null
         ? MapOptions(
@@ -428,11 +469,10 @@ class _AbsensiTabState extends State<AbsensiTab> {
       );
     }
 
-    final pos = _position;
-    final inZone = pos != null &&
-        _locService.isInsideZone(pos.latitude, pos.longitude, store);
-    final distance = pos != null
-        ? _locService.distanceTo(pos.latitude, pos.longitude, store)
+    final inZone = _hasPosition &&
+        _locService.isInsideZone(_effectiveLat, _effectiveLng, store);
+    final distance = _hasPosition
+        ? _locService.distanceTo(_effectiveLat, _effectiveLng, store)
         : null;
 
     return Container(
@@ -483,7 +523,7 @@ class _AbsensiTabState extends State<AbsensiTab> {
               ],
             ),
           ),
-          if (pos == null && _gpsTimeout)
+          if (!_hasPosition && _gpsTimeout)
             GestureDetector(
               onTap: () {
                 setState(() => _gpsTimeout = false);
@@ -503,7 +543,7 @@ class _AbsensiTabState extends State<AbsensiTab> {
                         fontWeight: FontWeight.w600)),
               ),
             )
-          else if (pos == null)
+          else if (!_hasPosition)
             const SizedBox(
                 width: 20,
                 height: 20,
@@ -660,7 +700,7 @@ class _AbsensiTabState extends State<AbsensiTab> {
     String msg;
     if (_store == null) {
       msg = 'Konfigurasi store terlebih dahulu';
-    } else if (_position == null) {
+    } else if (!_hasPosition) {
       msg = _gpsTimeout
           ? 'GPS tidak terdeteksi — tap Coba Lagi'
           : 'Menunggu sinyal GPS...';

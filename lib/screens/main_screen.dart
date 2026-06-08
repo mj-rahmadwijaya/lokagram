@@ -14,6 +14,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   late int _index;
+  final _absensiKey = GlobalKey<AbsensiTabState>();
+  final _riwayatKey = GlobalKey<RiwayatTabState>();
 
   @override
   void initState() {
@@ -21,7 +23,11 @@ class _MainScreenState extends State<MainScreen> {
     _index = widget.initialIndex;
   }
 
-  void _goTo(int i) => setState(() => _index = i);
+  void _goTo(int i) {
+    setState(() => _index = i);
+    if (i == 1) _absensiKey.currentState?.refresh();
+    if (i == 2) _riwayatKey.currentState?.reload();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +36,8 @@ class _MainScreenState extends State<MainScreen> {
         index: _index,
         children: [
           HomeTab(onAbsensi: () => _goTo(1), onRiwayat: () => _goTo(2)),
-          AbsensiTab(onRiwayat: () => _goTo(2)),
-          const RiwayatTab(),
+          AbsensiTab(key: _absensiKey, onRiwayat: () => _goTo(2)),
+          RiwayatTab(key: _riwayatKey),
           ProfilTab(onLogout: () {}),
         ],
       ),
