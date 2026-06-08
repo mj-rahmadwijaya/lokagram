@@ -65,17 +65,19 @@ class _AbsensiTabState extends State<AbsensiTab> {
   }
 
   Future<void> _initialize() async {
-    final prefs = await SharedPreferences.getInstance();
-    final store = await _storeService.loadStore();
-    final savedName = prefs.getString('employee_name') ?? '';
-    final granted = await _locService.ensurePermission();
-    if (!mounted) return;
-    _nameCtrl.text = savedName;
-    if (granted) await _startTracking();
-    setState(() {
-      _store = store;
-      _loading = false;
-    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final store = await _storeService.loadStore();
+      final savedName = prefs.getString('employee_name') ?? '';
+      final granted = await _locService.ensurePermission()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+      if (!mounted) return;
+      _nameCtrl.text = savedName;
+      setState(() { _store = store; _loading = false; });
+      if (granted) _startTracking(); // tidak di-await agar tidak blokir UI
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _startTracking() async {
