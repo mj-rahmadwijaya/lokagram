@@ -7,8 +7,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/attendance_record.dart';
 import '../../models/gps_mode.dart';
 import '../../models/store.dart';
+import '../../services/attendance_service.dart';
 import '../../services/location_service.dart';
 import '../../services/store_service.dart';
 import '../camera_screen.dart';
@@ -25,10 +27,12 @@ class AbsensiTab extends StatefulWidget {
 class AbsensiTabState extends State<AbsensiTab> {
   final _locService = LocationService();
   final _storeService = StoreService();
+  final _attendanceService = AttendanceService();
   final _nameCtrl = TextEditingController();
 
   Store? _store;
   bool _loading = true;
+  AttendanceRecord? _todayRecord;
 
   Position? _position;
   bool _isMocked = false;
@@ -88,12 +92,13 @@ class AbsensiTabState extends State<AbsensiTab> {
 
   Future<void> _refreshFakeGps() async {
     final prefs = await SharedPreferences.getInstance();
+    final today = await _attendanceService.todayRecord();
     if (!mounted) return;
     setState(() {
       _fakeGpsEnabled = prefs.getBool('dev_fake_gps') ?? false;
       _fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
       _fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
-      // Update isMocked jika posisi sudah ada
+      _todayRecord = today;
       if (_position != null) {
         _isMocked = _fakeGpsEnabled || _position!.isMocked;
       }
@@ -108,6 +113,7 @@ class AbsensiTabState extends State<AbsensiTab> {
       final fakeEnabled = prefs.getBool('dev_fake_gps') ?? false;
       final fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
       final fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
+      final todayRecord = await _attendanceService.todayRecord();
       final granted = await _locService.ensurePermission()
           .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (!mounted) return;
@@ -117,6 +123,7 @@ class AbsensiTabState extends State<AbsensiTab> {
         _fakeGpsEnabled = fakeEnabled;
         _fakeLat = fakeLat;
         _fakeLng = fakeLng;
+        _todayRecord = todayRecord;
         _loading = false;
       });
       if (granted) _startTracking();
@@ -244,9 +251,89 @@ class AbsensiTabState extends State<AbsensiTab> {
       ),
     );
     if (result == true && mounted) {
+      final today = await _attendanceService.todayRecord();
+      if (mounted) setState(() => _todayRecord = today);
       ShadToaster.of(context).show(const ShadToast(
           description: Text('Check in berhasil!')));
     }
+  }
+
+  Future<void> _checkOut() async {
+    final confirmed = await showShadSheet<bool>(
+      context: context,
+      side: ShadSheetSide.bottom,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: 72, height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFF3E0),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.logout_rounded,
+                    size: 40, color: Color(0xFFFF9800)),
+              ),
+              const SizedBox(height: 14),
+              const Text('Konfirmasi Check Out?',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text(
+                'Pastikan Anda sudah selesai bekerja hari ini.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[500], fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.check_rounded, size: 18),
+                  label: const Text('Check Out Sekarang',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF9800),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ShadButton.ghost(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Batal'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await _attendanceService.saveCheckOut(
+        _todayRecord!.id, DateTime.now());
+    final today = await _attendanceService.todayRecord();
+    if (!mounted) return;
+    setState(() => _todayRecord = today);
+    ShadToaster.of(context).show(const ShadToast(
+        description: Text('Check out berhasil!')));
   }
 
   String _clockStr() {
@@ -646,32 +733,86 @@ class AbsensiTabState extends State<AbsensiTab> {
   }
 
   Widget _buildButtons() {
+    final today = _todayRecord;
+    final checkedIn = today != null;
+    final checkedOut = today?.checkOutTime != null;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Check In
-        SizedBox(
-          height: 56,
-          child: ElevatedButton.icon(
-            onPressed: _isValid ? _checkIn : null,
-            icon: const Icon(Icons.check_circle_outline, size: 20),
-            label: const Text('Check In',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF43A047),
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey[200],
-              disabledForegroundColor: Colors.grey[400],
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 0,
+        // Status selesai
+        if (checkedIn && checkedOut) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.check_circle_rounded,
+                    color: Color(0xFF43A047), size: 36),
+                SizedBox(height: 8),
+                Text('Absensi selesai hari ini',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF43A047),
+                        fontSize: 15)),
+              ],
             ),
           ),
-        ),
+        ] else if (!checkedIn) ...[
+          // Check In
+          SizedBox(
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: _isValid ? _checkIn : null,
+              icon: const Icon(Icons.login_rounded, size: 20),
+              label: const Text('Check In',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF43A047),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey[200],
+                disabledForegroundColor: Colors.grey[400],
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          if (!_isValid && _store != null) ...[
+            const SizedBox(height: 10),
+            _buildHint(),
+          ],
+        ] else ...[
+          // Check Out
+          SizedBox(
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: _isValid ? _checkOut : null,
+              icon: const Icon(Icons.logout_rounded, size: 20),
+              label: const Text('Check Out',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF9800),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey[200],
+                disabledForegroundColor: Colors.grey[400],
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          if (!_isValid && _store != null) ...[
+            const SizedBox(height: 10),
+            _buildHint(),
+          ],
+        ],
+
         const SizedBox(height: 12),
-        // Riwayat
+        // Lihat Riwayat
         SizedBox(
           height: 48,
           child: OutlinedButton.icon(
@@ -682,16 +823,10 @@ class AbsensiTabState extends State<AbsensiTab> {
               foregroundColor: const Color(0xFF1976D2),
               side: const BorderSide(color: Color(0xFF1976D2)),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+                  borderRadius: BorderRadius.circular(16)),
             ),
           ),
         ),
-        // Hint jika tidak valid
-        if (!_isValid && _store != null) ...[
-          const SizedBox(height: 10),
-          _buildHint(),
-        ],
       ],
     );
   }

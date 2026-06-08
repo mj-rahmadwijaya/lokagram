@@ -25,6 +25,29 @@ class AttendanceService {
     );
   }
 
+  Future<AttendanceRecord?> todayRecord() async {
+    final records = await loadRecords();
+    final now = DateTime.now();
+    try {
+      return records.lastWhere((r) =>
+          r.timestamp.year == now.year &&
+          r.timestamp.month == now.month &&
+          r.timestamp.day == now.day);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCheckOut(String recordId, DateTime checkOutTime) async {
+    final records = await loadRecords();
+    final idx = records.indexWhere((r) => r.id == recordId);
+    if (idx == -1) return;
+    records[idx] = records[idx].copyWith(checkOutTime: checkOutTime);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        _key, jsonEncode(records.map((r) => r.toJson()).toList()));
+  }
+
   Future<void> clearRecords() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_key);

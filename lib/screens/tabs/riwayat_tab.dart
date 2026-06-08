@@ -247,6 +247,9 @@ class RiwayatTabState extends State<RiwayatTab> {
                               record: r,
                               tanggal: _formatTanggal(day),
                               masuk: r != null ? _formatWaktu(r.timestamp) : null,
+                              keluar: r?.checkOutTime != null
+                                  ? _formatWaktu(r!.checkOutTime!)
+                                  : null,
                               modeColor: r != null ? _modeColor(r.gpsMode) : Colors.grey,
                             );
                           },
@@ -300,12 +303,14 @@ class _RiwayatCard extends StatelessWidget {
   final AttendanceRecord? record;
   final String tanggal;
   final String? masuk;
+  final String? keluar;
   final Color modeColor;
 
   const _RiwayatCard({
     required this.record,
     required this.tanggal,
     required this.masuk,
+    required this.keluar,
     required this.modeColor,
   });
 
@@ -362,13 +367,29 @@ class _RiwayatCard extends StatelessWidget {
                   Row(
                     children: [
                       const Icon(Icons.login_rounded,
-                          size: 13, color: Colors.grey),
+                          size: 13, color: Color(0xFF43A047)),
                       const SizedBox(width: 4),
                       Text(masuk!,
                           style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF43A047))),
+                      const SizedBox(width: 10),
+                      Icon(Icons.logout_rounded,
+                          size: 13,
+                          color: keluar != null
+                              ? const Color(0xFFFF9800)
+                              : Colors.grey[300]),
+                      const SizedBox(width: 4),
+                      Text(
+                        keluar ?? '--:--',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: keluar != null
+                                ? const Color(0xFFFF9800)
+                                : Colors.grey[300]),
+                      ),
                     ],
                   )
                 else
