@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/attendance_record.dart';
-import '../models/gps_mode.dart';
 import '../models/store.dart';
 import '../services/attendance_service.dart';
 import '../services/location_service.dart';
@@ -105,72 +105,70 @@ class _CameraScreenState extends State<CameraScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _InfoRow(
-                            icon: Icons.person,
-                            label: 'Karyawan',
-                            value: widget.employeeName,
-                          ),
+                  ShadCard(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        _InfoRow(
+                          icon: Icons.person,
+                          label: 'Karyawan',
+                          value: widget.employeeName,
+                        ),
+                        const Divider(height: 20),
+                        _InfoRow(
+                          icon: Icons.access_time,
+                          label: 'Waktu',
+                          value: _formatDateTime(DateTime.now()),
+                        ),
+                        const Divider(height: 20),
+                        _InfoRow(
+                          icon: Icons.store,
+                          label: 'Store',
+                          value: widget.store.name,
+                        ),
+                        const Divider(height: 20),
+                        _InfoRow(
+                          icon: Icons.gps_fixed,
+                          label: 'Mode GPS',
+                          value: widget.store.gpsMode.label,
+                        ),
+                        if (widget.isMocked) ...[
                           const Divider(height: 20),
-                          _InfoRow(
-                            icon: Icons.access_time,
-                            label: 'Waktu',
-                            value: _formatDateTime(DateTime.now()),
+                          const _InfoRow(
+                            icon: Icons.warning,
+                            label: 'Peringatan',
+                            value: 'Fake GPS terdeteksi',
+                            valueColor: Colors.red,
                           ),
-                          const Divider(height: 20),
-                          _InfoRow(
-                            icon: Icons.store,
-                            label: 'Store',
-                            value: widget.store.name,
-                          ),
-                          const Divider(height: 20),
-                          _InfoRow(
-                            icon: Icons.gps_fixed,
-                            label: 'Mode GPS',
-                            value: widget.store.gpsMode.label,
-                          ),
-                          if (widget.isMocked) ...[
-                            const Divider(height: 20),
-                            const _InfoRow(
-                              icon: Icons.warning,
-                              label: 'Peringatan',
-                              value: 'Fake GPS terdeteksi',
-                              valueColor: Colors.red,
-                            ),
-                          ],
                         ],
-                      ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton.icon(
-                    onPressed: _saving ? null : _save,
-                    icon: _saving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.check_circle),
-                    label:
-                        Text(_saving ? 'Menyimpan...' : 'Konfirmasi Absensi'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
+                  SizedBox(
+                    width: double.infinity,
+                    child: ShadButton(
+                      onPressed: _saving ? null : _save,
+                      leading: _saving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_circle, size: 16),
+                      child: Text(_saving ? 'Menyimpan...' : 'Konfirmasi Absensi'),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    onPressed: _saving ? null : _takePhoto,
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Ambil Ulang'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ShadButton.outline(
+                      onPressed: _saving ? null : _takePhoto,
+                      leading: const Icon(Icons.camera_alt, size: 16),
+                      child: const Text('Ambil Ulang'),
                     ),
                   ),
                 ],

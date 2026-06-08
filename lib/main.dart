@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'screens/splash_screen.dart';
 
 void main() {
@@ -13,17 +14,12 @@ class AbsensiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Attandance',
+    return ShadApp(
+      title: 'Attendance',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1976D2),
-        ).copyWith(
-          secondary: const Color(0xFF43A047),
-          onSecondary: Colors.white,
-        ),
-        useMaterial3: true,
+      theme: ShadThemeData(
+        brightness: Brightness.light,
+        colorScheme: const ShadBlueColorScheme.light(),
       ),
       home: const SplashScreen(),
     );

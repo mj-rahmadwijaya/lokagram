@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/gps_mode.dart';
@@ -128,55 +129,54 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openCamera() async {
-    final confirmed = await showModalBottomSheet<bool>(
+    final confirmed = await showShadSheet<bool>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Icon(Icons.camera_front, size: 60, color: Theme.of(ctx).colorScheme.primary),
-            const SizedBox(height: 12),
-            const Text('Siap Absen?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(
-              'Pastikan wajah terlihat jelas di kamera depan.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => Navigator.pop(ctx, true),
-                icon: const Icon(Icons.camera_alt),
-                label: const Text('Buka Kamera'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+      side: ShadSheetSide.bottom,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Batal'),
+              const SizedBox(height: 20),
+              Icon(Icons.camera_front, size: 60,
+                  color: Theme.of(sheetContext).colorScheme.primary),
+              const SizedBox(height: 12),
+              const Text('Siap Absen?',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(
+                'Pastikan wajah terlihat jelas di kamera depan.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600], fontSize: 14),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ShadButton(
+                  onPressed: () => Navigator.pop(sheetContext, true),
+                  leading: const Icon(Icons.camera_alt, size: 16),
+                  child: const Text('Buka Kamera'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ShadButton.ghost(
+                  onPressed: () => Navigator.pop(sheetContext, false),
+                  child: const Text('Batal'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -205,8 +205,10 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (result == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Absensi berhasil disimpan!'), backgroundColor: Colors.green),
+      ShadToaster.of(context).show(
+        const ShadToast(
+          description: Text('Absensi berhasil disimpan!'),
+        ),
       );
     }
   }
@@ -219,15 +221,19 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const HistoryScreen())),
             tooltip: 'Riwayat',
           ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () async {
-              await Navigator.push(context, MaterialPageRoute(
-                builder: (_) => StoreSettingsScreen(initialStore: _store),
-              ));
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StoreSettingsScreen(initialStore: _store),
+                ),
+              );
               await _reloadStore();
             },
             tooltip: 'Pengaturan',
@@ -288,13 +294,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _buildHint(store),
                   ),
-                ElevatedButton.icon(
-                  onPressed: _isValid ? _openCamera : null,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Absen Sekarang'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                SizedBox(
+                  width: double.infinity,
+                  child: ShadButton(
+                    onPressed: _isValid ? _openCamera : null,
+                    leading: const Icon(Icons.camera_alt, size: 18),
+                    child: const Text(
+                      'Absen Sekarang',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ],
@@ -306,27 +314,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNameCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          children: [
-            const Icon(Icons.person, color: Colors.grey),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  hintText: 'Masukkan nama karyawan',
-                  border: InputBorder.none,
-                ),
-                textInputAction: TextInputAction.done,
-                onChanged: _saveName,
-              ),
-            ),
-          ],
-        ),
+    return ShadInput(
+      controller: _nameController,
+      placeholder: const Text('Masukkan nama karyawan'),
+      leading: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: Icon(Icons.person_outline, size: 18, color: Colors.grey),
       ),
+      onChanged: _saveName,
+      textInputAction: TextInputAction.done,
     );
   }
 
@@ -337,35 +333,35 @@ class _HomeScreenState extends State<HomeScreen> {
       GpsMode.antiFake: Colors.green,
     };
     final color = modeColors[store.gpsMode]!;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Icon(Icons.store, size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(store.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text('Radius ${store.radiusMeters.toStringAsFixed(0)}m',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                ],
-              ),
+    return ShadCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          const Icon(Icons.store, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(store.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                Text('Radius ${store.radiusMeters.toStringAsFixed(0)}m',
+                    style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: color.withOpacity(0.5)),
-              ),
-              child: Text(store.gpsMode.label,
-                  style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: color.withOpacity(0.4)),
             ),
-          ],
-        ),
+            child: Text(store.gpsMode.label,
+                style: TextStyle(
+                    fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
   }
@@ -465,81 +461,78 @@ class _HomeScreenState extends State<HomeScreen> {
       return Column(
         children: [
           if (_gpsTimeout)
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.gps_off, size: 40, color: Colors.orange),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'GPS Tidak Terdeteksi',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orange),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Pastikan GPS aktif dan berada di area terbuka',
-                                style: TextStyle(fontSize: 13, color: Colors.grey),
-                              ),
-                            ],
-                          ),
+            ShadCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.gps_off, size: 40, color: Colors.orange),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'GPS Tidak Terdeteksi',
+                              style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Pastikan GPS aktif dan berada di area terbuka',
+                              style: TextStyle(fontSize: 13, color: Colors.grey),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() => _gpsTimeout = false);
-                          _initialize();
-                        },
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Coba Lagi'),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ShadButton.outline(
+                      onPressed: () {
+                        setState(() => _gpsTimeout = false);
+                        _initialize();
+                      },
+                      leading: const Icon(Icons.refresh, size: 16),
+                      child: const Text('Coba Lagi'),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             )
           else
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: CircularProgressIndicator(strokeWidth: 3),
+            ShadCard(
+              padding: const EdgeInsets.all(16),
+              child: const Row(
+                children: [
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: CircularProgressIndicator(strokeWidth: 3),
+                  ),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Mencari sinyal GPS...',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Pastikan GPS aktif dan ada di area terbuka',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Mencari sinyal GPS...',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Pastikan GPS aktif dan ada di area terbuka',
-                            style: TextStyle(fontSize: 13, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           const SizedBox(height: 8),
@@ -563,7 +556,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: inZone ? Icons.check_circle : Icons.cancel,
             color: inZone ? Colors.green : Colors.red,
             title: inZone ? 'Di dalam zona' : 'Di luar zona',
-            subtitle: 'Jarak: ${distance.toStringAsFixed(0)}m / radius ${store.radiusMeters.toStringAsFixed(0)}m',
+            subtitle:
+                'Jarak: ${distance.toStringAsFixed(0)}m / radius ${store.radiusMeters.toStringAsFixed(0)}m',
           ),
         const SizedBox(height: 8),
         _buildPositionMap(store),
@@ -585,12 +579,14 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.all(60),
               maxZoom: 17,
             ),
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.none),
           )
         : MapOptions(
             initialCenter: storePos,
             initialZoom: 16,
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.none),
           );
 
     return ClipRRect(
@@ -664,32 +660,39 @@ class _StatusCard extends StatelessWidget {
   final String title;
   final String? subtitle;
 
-  const _StatusCard({required this.icon, required this.color, required this.title, this.subtitle});
+  const _StatusCard(
+      {required this.icon,
+      required this.color,
+      required this.title,
+      this.subtitle});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 4),
-                    Text(subtitle!, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                  ],
+    return ShadCard(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Icon(icon, size: 40, color: color),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: color)),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(subtitle!,
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.grey)),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -712,10 +715,16 @@ class _PermissionDeniedCard extends StatelessWidget {
             const Text('Izin Lokasi Dibutuhkan',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('Aktifkan GPS dan izinkan akses lokasi untuk menggunakan fitur absensi.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const Text(
+                'Aktifkan GPS dan izinkan akses lokasi untuk menggunakan fitur absensi.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 24),
-            ElevatedButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh), label: const Text('Coba Lagi')),
+            ShadButton.outline(
+              onPressed: onRetry,
+              leading: const Icon(Icons.refresh, size: 16),
+              child: const Text('Coba Lagi'),
+            ),
           ],
         ),
       ),
@@ -740,10 +749,16 @@ class _NoStoreCard extends StatelessWidget {
             const Text('Store Belum Dikonfigurasi',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('Set lokasi store terlebih dahulu sebelum karyawan bisa absen.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const Text(
+                'Set lokasi store terlebih dahulu sebelum karyawan bisa absen.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 24),
-            ElevatedButton.icon(onPressed: onSetup, icon: const Icon(Icons.settings), label: const Text('Set Lokasi Store')),
+            ShadButton(
+              onPressed: onSetup,
+              leading: const Icon(Icons.settings, size: 16),
+              child: const Text('Set Lokasi Store'),
+            ),
           ],
         ),
       ),

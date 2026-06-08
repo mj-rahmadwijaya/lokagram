@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/attendance_record.dart';
 import '../models/gps_mode.dart';
@@ -35,20 +36,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _confirmClear() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showShadDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => ShadDialog.alert(
         title: const Text('Hapus Semua Riwayat?'),
-        content: const Text('Data absensi tidak bisa dikembalikan.'),
+        description: const Text('Data absensi tidak bisa dikembalikan.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
+          ShadButton.outline(
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Batal'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child:
-                const Text('Hapus', style: TextStyle(color: Colors.red)),
+          ShadButton.destructive(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Hapus'),
           ),
         ],
       ),
@@ -162,92 +162,90 @@ class _RecordCard extends StatelessWidget {
     final hasPhoto =
         record.photoPath != null && File(record.photoPath!).existsSync();
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            GestureDetector(
-              onTap: hasPhoto
-                  ? () => _openFullPhoto(context, record.photoPath!)
-                  : null,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: hasPhoto
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Image.file(
-                            File(record.photoPath!),
-                            width: 64,
-                            height: 64,
-                            fit: BoxFit.cover,
-                          ),
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.zoom_in, color: Colors.white, size: 20),
-                          ),
-                        ],
-                      )
-                    : Container(
-                        width: 64,
-                        height: 64,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.person, color: Colors.grey, size: 32),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    record.employeeName,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    formatDateTime(record.timestamp),
-                    style:
-                        const TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      _Chip(
-                        label: record.gpsMode.label,
-                        color: modeColor(record.gpsMode),
-                      ),
-                      _Chip(
-                        label: record.isInsideZone
-                            ? 'Di dalam zona'
-                            : 'Di luar zona',
-                        color: record.isInsideZone
-                            ? Colors.green
-                            : Colors.red,
-                      ),
-                      if (record.isMocked)
-                        const _Chip(
-                          label: 'Fake GPS',
-                          color: Colors.red,
+    return ShadCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: hasPhoto
+                ? () => _openFullPhoto(context, record.photoPath!)
+                : null,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: hasPhoto
+                  ? Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Image.file(
+                          File(record.photoPath!),
+                          width: 64,
+                          height: 64,
+                          fit: BoxFit.cover,
                         ),
-                    ],
-                  ),
-                ],
-              ),
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(Icons.zoom_in,
+                              color: Colors.white, size: 20),
+                        ),
+                      ],
+                    )
+                  : Container(
+                      width: 64,
+                      height: 64,
+                      color: Colors.grey[200],
+                      child: const Icon(Icons.person,
+                          color: Colors.grey, size: 32),
+                    ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.employeeName,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  formatDateTime(record.timestamp),
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    _Chip(
+                      label: record.gpsMode.label,
+                      color: modeColor(record.gpsMode),
+                    ),
+                    _Chip(
+                      label: record.isInsideZone
+                          ? 'Di dalam zona'
+                          : 'Di luar zona',
+                      color:
+                          record.isInsideZone ? Colors.green : Colors.red,
+                    ),
+                    if (record.isMocked)
+                      const _Chip(
+                        label: 'Fake GPS',
+                        color: Colors.red,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -264,14 +262,14 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Text(
         label,
         style: TextStyle(
-            fontSize: 11, color: color, fontWeight: FontWeight.w600),
+            fontSize: 11, color: color, fontWeight: FontWeight.w500),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/gps_mode.dart';
 import '../models/store.dart';
@@ -96,8 +97,10 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama store tidak boleh kosong')),
+      ShadToaster.of(context).show(
+        const ShadToast.destructive(
+          description: Text('Nama store tidak boleh kosong'),
+        ),
       );
       return;
     }
@@ -117,32 +120,36 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
       appBar: AppBar(
         title: const Text('Pengaturan Store'),
         actions: [
-          TextButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save),
-            label: const Text('Simpan'),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ShadButton(
+              onPressed: _save,
+              size: ShadButtonSize.sm,
+              leading: const Icon(Icons.save, size: 14),
+              child: const Text('Simpan'),
+            ),
           ),
         ],
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
+                ShadInput(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama Store',
-                    prefixIcon: Icon(Icons.store),
-                    border: OutlineInputBorder(),
+                  placeholder: const Text('Nama Store'),
+                  leading: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.store, size: 18, color: Colors.grey),
                   ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
                   'Mode GPS',
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 SegmentedButton<GpsMode>(
@@ -175,7 +182,8 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Text('Radius:'),
+                    const Text('Radius:',
+                        style: TextStyle(fontWeight: FontWeight.w500)),
                     Expanded(
                       child: Slider(
                         min: 50,
@@ -186,9 +194,12 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                         onChanged: (v) => setState(() => _radius = v),
                       ),
                     ),
-                    Text(
-                      '${_radius.toStringAsFixed(0)}m',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        '${_radius.toStringAsFixed(0)}m',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ],
                 ),
