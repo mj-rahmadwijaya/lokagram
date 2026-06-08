@@ -193,66 +193,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const Text('Masuk'),
                 ),
               ),
-              const SizedBox(height: 28),
-
-              // Divider
-              Row(
-                children: [
-                  Expanded(child: Divider(color: Colors.grey[300])),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Text('atau masuk dengan',
-                        style: TextStyle(
-                            color: Colors.grey[400], fontSize: 12)),
-                  ),
-                  Expanded(child: Divider(color: Colors.grey[300])),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Google
-              SizedBox(
-                width: double.infinity,
-                child: ShadButton.outline(
-                  onPressed: _belumTersedia,
-                  leading: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: const BoxDecoration(shape: BoxShape.circle),
-                    child: const Text('G',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.red,
-                            fontSize: 16,
-                            height: 1.25)),
-                  ),
-                  child: const Text('Google'),
-                ),
-              ),
-              const SizedBox(height: 40),
-
-              // Daftar
-              Center(
-                child: GestureDetector(
-                  onTap: _belumTersedia,
-                  child: RichText(
-                    text: TextSpan(
-                      text: 'Belum punya akun? ',
-                      style: TextStyle(
-                          color: Colors.grey[500], fontSize: 13),
-                      children: const [
-                        TextSpan(
-                          text: 'Daftar di sini',
-                          style: TextStyle(
-                              color: Color(0xFF1976D2),
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
               const SizedBox(height: 24),
             ],
           ),

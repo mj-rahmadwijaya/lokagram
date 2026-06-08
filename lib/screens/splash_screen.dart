@@ -63,19 +63,12 @@ class _SplashScreenState extends State<SplashScreen>
             children: [
               ScaleTransition(
                 scale: _scale,
-                child: _buildIcon(),
-              ),
-              const SizedBox(height: 36),
-              const Text(
-                'Attendance',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1976D2),
-                  letterSpacing: 0.3,
+                child: Image.asset(
+                  'assets/logo.png',
+                  width: 220,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Text(
                 'Presensi, izin dan cuti',
                 style: TextStyle(fontSize: 14, color: Colors.grey[500]),

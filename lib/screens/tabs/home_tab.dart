@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/attendance_record.dart';
 import '../../services/attendance_service.dart';
@@ -30,6 +31,81 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkGps());
+  }
+
+  Future<void> _checkGps() async {
+    if (!mounted) return;
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!mounted) return;
+    if (!enabled) _showGpsDialog();
+  }
+
+  void _showGpsDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.location_on_rounded,
+                    size: 36, color: Color(0xFF1976D2)),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Aktifkan Lokasi GPS',
+                style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1A1A2E)),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Aplikasi membutuhkan GPS untuk mencatat kehadiran Anda. Aktifkan lokasi terlebih dahulu.',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.5),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await Geolocator.openLocationSettings();
+                    if (!mounted) return;
+                    Navigator.of(context).pop();
+                    // Re-check after returning from settings
+                    Future.delayed(const Duration(seconds: 1), _checkGps);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1976D2),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: const Text('Aktifkan Sekarang',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _load() async {
