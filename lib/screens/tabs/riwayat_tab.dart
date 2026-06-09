@@ -408,23 +408,17 @@ class _RiwayatCard extends StatelessWidget {
                     horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: hadir
-                      ? (inZone
-                          ? const Color(0xFFE8F5E9)
-                          : const Color(0xFFFBE9E7))
+                      ? const Color(0xFFE8F5E9)
                       : const Color(0xFFFCE4EC),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  hadir
-                      ? (inZone ? 'Dalam Zona' : 'Luar Zona')
-                      : 'Absen',
+                  hadir ? 'Hadir' : 'Absen',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                       color: hadir
-                          ? (inZone
-                              ? const Color(0xFF43A047)
-                              : const Color(0xFFFF7043))
+                          ? const Color(0xFF43A047)
                           : const Color(0xFFE53935)),
                 ),
               ),

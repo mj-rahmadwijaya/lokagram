@@ -104,24 +104,26 @@ class _FakeGpsScreenState extends State<FakeGpsScreen> {
           : Column(
               children: [
                 // Toggle aktif
-                Container(
+                Material(
                   color: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 4),
-                  child: SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Aktifkan Fake GPS',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 15)),
-                    subtitle: Text(
-                      _enabled
-                          ? 'Absensi akan memakai lokasi pin di bawah'
-                          : 'Menggunakan GPS asli',
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 4),
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Aktifkan Fake GPS',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 15)),
+                      subtitle: Text(
+                        _enabled
+                            ? 'Absensi akan memakai lokasi pin di bawah'
+                            : 'Menggunakan GPS asli',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      value: _enabled,
+                      onChanged: (v) => setState(() { _enabled = v; _saved = false; }),
+                      activeColor: const Color(0xFF1976D2),
                     ),
-                    value: _enabled,
-                    onChanged: (v) => setState(() { _enabled = v; _saved = false; }),
-                    activeColor: const Color(0xFF1976D2),
                   ),
                 ),
                 const Divider(height: 1),

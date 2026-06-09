@@ -506,19 +506,15 @@ class _RecordItem extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: inZone
-                      ? const Color(0xFFE8F5E9)
-                      : const Color(0xFFFBE9E7),
+                  color: const Color(0xFFE8F5E9),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  inZone ? 'Dalam Zona' : 'Luar Zona',
+                  'Hadir',
                   style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
-                      color: inZone
-                          ? const Color(0xFF43A047)
-                          : const Color(0xFFFF7043)),
+                      color: const Color(0xFF43A047)),
                 ),
               ),
             ],

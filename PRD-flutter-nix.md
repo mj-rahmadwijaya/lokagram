@@ -8,7 +8,7 @@
 - **Selesai:** 2026-06-04
 - **Prasyarat:** PRD Belajar Nix selesai (Tahap 1–4 ✅) — paham Flakes
 - **Status terkini:** SELESAI ✅ — semua Tahap 1–4 dan tujuan G1–G5 tercapai 🎉
-- **Lanjutan:** App dikembangkan menjadi Attendance App — branch `attendance` di repo `lokagram`
+- **Lanjutan:** App dikembangkan menjadi Attendance App — branch `attendance-2` di repo `lokagram`
 
 ---
 
@@ -179,6 +179,10 @@ androidSdk = (pkgs.androidenv.composeAndroidPackages {
 | 2026-06-05 | **Perbaikan UX & fitur baru.** 5 perbaikan UX: tombol Absen sticky di bawah, bottom sheet konfirmasi sebelum kamera, animasi GPS loading, foto riwayat bisa full screen, FAB "Lokasi Saya" di StoreSettings. Tambah peta posisi karyawan vs store di mode Fixed GPS & Anti-Fake. | Fake GPS terdeteksi: sembunyikan status zona, tampilkan hanya peringatan fake GPS. |
 | 2026-06-05 | **Branding & splash screen.** Tambah asset logo + icon (Attandance). Warna tema diupdate ke biru #1976D2 + hijau #43A047. Custom animated splash screen: icon bouncing + logo fade-in. Native splash minimal (putih). Packages: `flutter_launcher_icons`, `flutter_native_splash`. | Kendala: cache build menyebabkan assets tidak muncul → solusi: `adb uninstall` + `flutter clean` sebelum run. |
 | 2026-06-05 | **Fix GPS cold start & skenario GPS off.** Strategi GPS 3-lapis: (1) lastKnownPosition instant, (2) network position paralel (cell/WiFi, 4s), (3) stream GPS akurasi tinggi. Timeout 8 detik → notif "GPS Tidak Terdeteksi" + tombol Coba Lagi. | Bug: saat GPS dimatikan → buka app → nyalakan GPS → tap Coba Lagi: stream GPS tidak pernah dimulai. Fix: ekstrak `_startLocationTracking()`, panggil di `_initialize()` dan `onRetry`. |
+| 2026-06-08 | **Redesign UI total — branch `attendance-2`.** Redesign penuh: SplashScreen → LoginScreen (ShadInput, dummy login `test`/`123456`) → MainScreen dengan bottom nav 4 tab (Beranda, Absensi, Riwayat, Profil). Dependency baru: `shadcn_ui ^0.54.0`. | Semua screen dibangun ulang dari nol dengan design system Shadcn/UI. Login simpan session di SharedPreferences (`is_logged_in`). |
+| 2026-06-08 | **HomeTab & AbsensiTab.** HomeTab: header biru, stat card (Hadir/Luar Zona/Bulan), tombol quick-absensi, 5 riwayat terbaru. AbsensiTab: peta karyawan vs store, info lokasi + status badge, jam digital real-time, tombol Check In / Check Out. | Bug: spinner absensi tidak berhenti — loading selesai sebelum GPS tracking dimulai. Fix: set `_loading = false` setelah tracking dimulai. |
+| 2026-06-08 | **FakeGpsScreen & RiwayatTab.** FakeGpsScreen: toggle aktifkan fake GPS + pilih lokasi pin di peta OpenStreetMap, simpan ke SharedPreferences. RiwayatTab: kalender bulan, stat hadir/tidak hadir, card per hari dengan jam masuk & keluar. | State stale GPS di AbsensiTab: posisi tidak di-refresh saat tab dipilih ulang. Fix: `MainScreen` panggil `_absensiKey.currentState?.refresh()` setiap kali tab Absensi dipilih. |
+| 2026-06-08 | **Check Out + alert GPS real-time.** Alur Check Out: tombol muncul setelah check in, validasi GPS sama dengan check in, konfirmasi bottom sheet, simpan `checkOutTime` ke record. Alert dialog GPS mati di-listen dari `MainScreen` via `Geolocator.getServiceStatusStream()` — tidak bisa di-dismiss sebelum GPS diaktifkan. | Bug: GPS service listener di AbsensiTab dan MainScreen berduplikasi. Refactor: listener global di MainScreen, AbsensiTab punya listener sendiri hanya untuk restart tracking. |
 
 ---
 
@@ -255,10 +259,12 @@ Failed to install the following SDK components: build-tools;X.X.X
       cmdLineToolsVersion = "11.0";
       platformToolsVersion = "35.0.2";
       buildToolsVersions = [ "34.0.0" "35.0.0" ];
-      platformVersions = [ "36" ];
+      platformVersions = [ "34" "35" "36" ];
       cmakeVersions = [ "3.22.1" ];
-      includeEmulator = false;
-      includeSystemImages = false;
+      includeEmulator = true;          # set false kalau tidak butuh emulator
+      includeSystemImages = true;      # set false kalau tidak butuh emulator
+      systemImageTypes = [ "google_apis_playstore" ];
+      abiVersions = [ "x86_64" ];
       includeSources = false;
       extraLicenses = [
         "android-sdk-license"
