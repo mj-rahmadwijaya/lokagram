@@ -45,6 +45,10 @@ class AbsensiTabState extends State<AbsensiTab> {
   double _fakeLat = -6.2088;
   double _fakeLng = 106.8456;
 
+  // Flexible mode — pin yang bisa digeser di peta
+  LatLng? _flexPin;
+  final _mapCtrl = MapController();
+
   // Clock
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
@@ -78,6 +82,7 @@ class AbsensiTabState extends State<AbsensiTab> {
     _serviceSub?.cancel();
     _clockTimer?.cancel();
     _nameCtrl.dispose();
+    _mapCtrl.dispose();
     super.dispose();
   }
 
@@ -162,9 +167,24 @@ class AbsensiTabState extends State<AbsensiTab> {
     if (mounted) setState(() => _store = store);
   }
 
-  double get _effectiveLat => _fakeGpsEnabled ? _fakeLat : (_position?.latitude ?? 0);
-  double get _effectiveLng => _fakeGpsEnabled ? _fakeLng : (_position?.longitude ?? 0);
-  bool get _hasPosition => _fakeGpsEnabled || _position != null;
+  bool get _isFlexible => _store?.gpsMode == GpsMode.flexible;
+
+  double get _effectiveLat {
+    if (_isFlexible) return _flexPin?.latitude ?? (_position?.latitude ?? 0);
+    if (_fakeGpsEnabled) return _fakeLat;
+    return _position?.latitude ?? 0;
+  }
+
+  double get _effectiveLng {
+    if (_isFlexible) return _flexPin?.longitude ?? (_position?.longitude ?? 0);
+    if (_fakeGpsEnabled) return _fakeLng;
+    return _position?.longitude ?? 0;
+  }
+
+  bool get _hasPosition {
+    if (_isFlexible) return _flexPin != null || _position != null;
+    return _fakeGpsEnabled || _position != null;
+  }
 
   bool get _isValid {
     final store = _store;
@@ -436,22 +456,30 @@ class AbsensiTabState extends State<AbsensiTab> {
         ? LatLng(_effectiveLat, _effectiveLng)
         : (pos != null ? LatLng(pos.latitude, pos.longitude) : null);
 
-    final mapOptions = empPos != null
+    final isFlexible = store.gpsMode == GpsMode.flexible;
+
+    final mapOptions = isFlexible
         ? MapOptions(
-            initialCameraFit: CameraFit.bounds(
-              bounds: LatLngBounds.fromPoints([storePos, empPos]),
-              padding: const EdgeInsets.all(60),
-              maxZoom: 17,
-            ),
-            interactionOptions:
-                const InteractionOptions(flags: InteractiveFlag.none),
-          )
-        : MapOptions(
-            initialCenter: storePos,
+            initialCenter: _flexPin ?? storePos,
             initialZoom: 16,
-            interactionOptions:
-                const InteractionOptions(flags: InteractiveFlag.none),
-          );
+            onTap: (_, point) => setState(() => _flexPin = point),
+          )
+        : empPos != null
+            ? MapOptions(
+                initialCameraFit: CameraFit.bounds(
+                  bounds: LatLngBounds.fromPoints([storePos, empPos]),
+                  padding: const EdgeInsets.all(60),
+                  maxZoom: 17,
+                ),
+                interactionOptions:
+                    const InteractionOptions(flags: InteractiveFlag.none),
+              )
+            : MapOptions(
+                initialCenter: storePos,
+                initialZoom: 16,
+                interactionOptions:
+                    const InteractionOptions(flags: InteractiveFlag.none),
+              );
 
     return Container(
       height: 220,
@@ -467,48 +495,76 @@ class AbsensiTabState extends State<AbsensiTab> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: FlutterMap(
-          options: mapOptions,
+        child: Stack(
           children: [
-            TileLayer(
-              urlTemplate:
-                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'io.grandepos.lokagram',
+            FlutterMap(
+              mapController: _mapCtrl,
+              options: mapOptions,
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'io.grandepos.lokagram',
+                ),
+                CircleLayer(circles: [
+                  CircleMarker(
+                    point: storePos,
+                    radius: store.radiusMeters,
+                    useRadiusInMeter: true,
+                    color: const Color(0xFF1976D2).withValues(alpha: 0.12),
+                    borderColor: const Color(0xFF1976D2),
+                    borderStrokeWidth: 2,
+                  ),
+                ]),
+                MarkerLayer(markers: [
+                  Marker(
+                    point: storePos,
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.topCenter,
+                    child: const Icon(Icons.store_rounded,
+                        color: Color(0xFF1976D2), size: 36),
+                  ),
+                  if (empPos != null)
+                    Marker(
+                      point: empPos,
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.topCenter,
+                      child: Icon(
+                        isFlexible
+                            ? Icons.location_pin
+                            : Icons.person_pin_circle_rounded,
+                        color: _isValid
+                            ? const Color(0xFF43A047)
+                            : const Color(0xFFFF7043),
+                        size: 36,
+                      ),
+                    ),
+                ]),
+              ],
             ),
-            CircleLayer(circles: [
-              CircleMarker(
-                point: storePos,
-                radius: store.radiusMeters,
-                useRadiusInMeter: true,
-                color: const Color(0xFF1976D2).withValues(alpha: 0.12),
-                borderColor: const Color(0xFF1976D2),
-                borderStrokeWidth: 2,
-              ),
-            ]),
-            MarkerLayer(markers: [
-              Marker(
-                point: storePos,
-                width: 40,
-                height: 40,
-                alignment: Alignment.topCenter,
-                child: const Icon(Icons.store_rounded,
-                    color: Color(0xFF1976D2), size: 36),
-              ),
-              if (empPos != null)
-                Marker(
-                  point: empPos,
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.topCenter,
-                  child: Icon(
-                    Icons.person_pin_circle_rounded,
-                    color: _isValid
-                        ? const Color(0xFF43A047)
-                        : const Color(0xFFFF7043),
-                    size: 36,
+            // Hint tap untuk flexible mode
+            if (isFlexible)
+              Positioned(
+                bottom: 8,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Text(
+                      'Tap di peta untuk set lokasi Anda',
+                      style: TextStyle(color: Colors.white, fontSize: 11),
+                    ),
                   ),
                 ),
-            ]),
+              ),
           ],
         ),
       ),
