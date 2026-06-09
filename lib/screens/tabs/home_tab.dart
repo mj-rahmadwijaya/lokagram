@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +19,8 @@ class _HomeTabState extends State<HomeTab> {
   String _nama = '';
   List<AttendanceRecord> _records = [];
   bool _loading = true;
+  bool _gpsDialogShowing = false;
+  StreamSubscription<ServiceStatus>? _gpsSub;
 
   static const _bulan = [
     '', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
@@ -32,6 +35,20 @@ class _HomeTabState extends State<HomeTab> {
     super.initState();
     _load();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkGps());
+    _gpsSub = Geolocator.getServiceStatusStream().listen((status) {
+      if (status == ServiceStatus.disabled && mounted && !_gpsDialogShowing) {
+        _showGpsDialog();
+      } else if (status == ServiceStatus.enabled && mounted && _gpsDialogShowing) {
+        Navigator.of(context).pop();
+        _gpsDialogShowing = false;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _gpsSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkGps() async {
@@ -42,6 +59,7 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   void _showGpsDialog() {
+    _gpsDialogShowing = true;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -83,11 +101,9 @@ class _HomeTabState extends State<HomeTab> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    await Geolocator.openLocationSettings();
-                    if (!mounted) return;
                     Navigator.of(context).pop();
-                    // Re-check after returning from settings
-                    Future.delayed(const Duration(seconds: 1), _checkGps);
+                    _gpsDialogShowing = false;
+                    await Geolocator.openLocationSettings();
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
@@ -105,7 +121,7 @@ class _HomeTabState extends State<HomeTab> {
           ),
         ),
       ),
-    );
+    ).then((_) => _gpsDialogShowing = false);
   }
 
   Future<void> _load() async {

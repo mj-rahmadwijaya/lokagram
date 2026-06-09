@@ -13,7 +13,6 @@ import '../../services/attendance_service.dart';
 import '../../services/location_service.dart';
 import '../../services/store_service.dart';
 import '../barcode_scan_screen.dart';
-import '../camera_screen.dart';
 import '../store_settings_screen.dart';
 
 class AbsensiTab extends StatefulWidget {
@@ -40,11 +39,6 @@ class AbsensiTabState extends State<AbsensiTab> {
   StreamSubscription<Position>? _posSub;
   StreamSubscription<ServiceStatus>? _serviceSub;
 
-  // Fake GPS (untuk test)
-  bool _fakeGpsEnabled = false;
-  double _fakeLat = -6.2088;
-  double _fakeLng = 106.8456;
-
   // Clock
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
@@ -65,9 +59,7 @@ class AbsensiTabState extends State<AbsensiTab> {
         const Duration(seconds: 1),
         (_) { if (mounted) setState(() => _now = DateTime.now()); });
     _serviceSub = Geolocator.getServiceStatusStream().listen((status) {
-      if (status == ServiceStatus.enabled && mounted) {
-        _refreshFakeGps().then((_) => _startTracking());
-      }
+      if (status == ServiceStatus.enabled && mounted) _startTracking();
     });
   }
 
@@ -81,25 +73,11 @@ class AbsensiTabState extends State<AbsensiTab> {
   }
 
   Future<void> refresh() async {
-    await _refreshFakeGps();
+    final today = await _attendanceService.todayRecord();
+    if (mounted) setState(() => _todayRecord = today);
     final granted = await _locService.ensurePermission()
         .timeout(const Duration(seconds: 3), onTimeout: () => false);
     if (granted && mounted) _startTracking();
-  }
-
-  Future<void> _refreshFakeGps() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = await _attendanceService.todayRecord();
-    if (!mounted) return;
-    setState(() {
-      _fakeGpsEnabled = prefs.getBool('dev_fake_gps') ?? false;
-      _fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
-      _fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
-      _todayRecord = today;
-      if (_position != null) {
-        _isMocked = _fakeGpsEnabled || _position!.isMocked;
-      }
-    });
   }
 
   Future<void> _initialize() async {
@@ -107,17 +85,11 @@ class AbsensiTabState extends State<AbsensiTab> {
       final prefs = await SharedPreferences.getInstance();
       final store = await _storeService.loadStore();
       final savedName = prefs.getString('employee_name') ?? '';
-      final fakeEnabled = prefs.getBool('dev_fake_gps') ?? false;
-      final fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
-      final fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
       final todayRecord = await _attendanceService.todayRecord();
       if (!mounted) return;
       _nameCtrl.text = savedName;
       setState(() {
         _store = store;
-        _fakeGpsEnabled = fakeEnabled;
-        _fakeLat = fakeLat;
-        _fakeLng = fakeLng;
         _todayRecord = todayRecord;
         _loading = false;
       });
@@ -138,7 +110,7 @@ class AbsensiTabState extends State<AbsensiTab> {
     if (last != null && mounted) {
       setState(() {
         _position = last;
-        _isMocked = _fakeGpsEnabled || last.isMocked;
+        _isMocked = last.isMocked;
       });
     }
 
@@ -150,7 +122,7 @@ class AbsensiTabState extends State<AbsensiTab> {
       if (p != null && mounted && _position == null) {
         setState(() {
           _position = p;
-          _isMocked = _fakeGpsEnabled || p.isMocked;
+          _isMocked = p.isMocked;
           _gpsTimeout = false;
         });
       }
@@ -159,7 +131,7 @@ class AbsensiTabState extends State<AbsensiTab> {
     _posSub = _locService.positionStream().listen((p) {
       if (mounted) setState(() {
         _position = p;
-        _isMocked = _fakeGpsEnabled || p.isMocked;
+        _isMocked = p.isMocked;
         _gpsTimeout = false;
       });
     });
@@ -170,16 +142,17 @@ class AbsensiTabState extends State<AbsensiTab> {
     if (mounted) setState(() => _store = store);
   }
 
-  // GPS efektif: jika fake GPS aktif (untuk test), pakai koordinat fake
-  double get _effectiveLat => _fakeGpsEnabled ? _fakeLat : (_position?.latitude ?? 0);
-  double get _effectiveLng => _fakeGpsEnabled ? _fakeLng : (_position?.longitude ?? 0);
-  bool get _hasPosition => _fakeGpsEnabled || _position != null;
+  double get _effectiveLat => _position?.latitude ?? 0;
+  double get _effectiveLng => _position?.longitude ?? 0;
+  bool get _hasPosition => _position != null;
+
+  bool get _isFakeGpsDetected => _isMocked;
 
   bool get _isValid {
     final store = _store;
     if (store == null) return false;
     if (!_hasPosition) return false;
-    if (_isMocked && !_fakeGpsEnabled) return false; // blokir fake GPS asli
+    if (_isFakeGpsDetected) return false;
     return _locService.isInsideZone(_effectiveLat, _effectiveLng, store);
   }
 
@@ -208,7 +181,7 @@ class AbsensiTabState extends State<AbsensiTab> {
                   color: Color(0xFFE8F5E9),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.camera_front,
+                child: const Icon(Icons.qr_code_scanner,
                     size: 40, color: Color(0xFF43A047)),
               ),
               const SizedBox(height: 14),
@@ -217,7 +190,7 @@ class AbsensiTabState extends State<AbsensiTab> {
                       fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text(
-                'Foto selfie → scan barcode → presensi tercatat.',
+                'Scan barcode → presensi tercatat.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[500], fontSize: 13),
               ),
@@ -226,8 +199,8 @@ class AbsensiTabState extends State<AbsensiTab> {
                 width: double.infinity,
                 child: ShadButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  leading: const Icon(Icons.camera_alt, size: 16),
-                  child: const Text('Mulai'),
+                  leading: const Icon(Icons.qr_code_scanner, size: 16),
+                  child: const Text('Mulai Scan'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -245,32 +218,20 @@ class AbsensiTabState extends State<AbsensiTab> {
     );
     if (confirmed != true || !mounted) return;
 
-    // Step 1: Foto selfie
-    final photo = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CameraScreen(
-          employeeName: _nameCtrl.text.trim(),
-        ),
-      ),
-    );
-    if (photo == null || !mounted) return;
-
-    // Step 2: Scan barcode
+    // Scan barcode
     final barcode = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const BarcodeScanScreen()),
     );
     if (barcode == null || !mounted) return;
 
-    // Step 3: Simpan record
+    // Simpan record
     final store = _store!;
     final now = DateTime.now();
     final record = AttendanceRecord(
       id: now.millisecondsSinceEpoch.toString(),
       employeeName: _nameCtrl.text.trim(),
       timestamp: now,
-      photoPath: photo.path,
       lat: _effectiveLat,
       lng: _effectiveLng,
       isInsideZone: _locService.isInsideZone(_effectiveLat, _effectiveLng, store),
@@ -411,6 +372,10 @@ class AbsensiTabState extends State<AbsensiTab> {
                   _buildMap(),
                   const SizedBox(height: 16),
                   _buildLocationInfo(),
+                  if (_isFakeGpsDetected) ...[
+                    const SizedBox(height: 12),
+                    _buildFakeGpsWarning(),
+                  ],
                   const SizedBox(height: 20),
                   _buildClock(),
                   const SizedBox(height: 24),
@@ -640,8 +605,7 @@ class AbsensiTabState extends State<AbsensiTab> {
   }
 
   Widget _buildStatusBadge(bool inZone) {
-    // Fake GPS asli (bukan dari fitur test) → blokir
-    if (_isMocked && !_fakeGpsEnabled) {
+    if (_isMocked) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -701,21 +665,43 @@ class AbsensiTabState extends State<AbsensiTab> {
           const SizedBox(height: 6),
           Text(_dateStr(),
               style: const TextStyle(fontSize: 13, color: Colors.grey)),
-          if (_fakeGpsEnabled) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text('Mode Test: Fake GPS Aktif',
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFakeGpsWarning() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBE9E7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE53935).withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFE53935), size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Fake GPS Terdeteksi!',
                   style: TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFFF57F17),
-                      fontWeight: FontWeight.w500)),
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE53935),
+                      fontSize: 13),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Absensi diblokir. Matikan aplikasi mock GPS lalu buka kembali halaman ini.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey[700], height: 1.4),
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -823,8 +809,6 @@ class AbsensiTabState extends State<AbsensiTab> {
       msg = _gpsTimeout
           ? 'GPS tidak terdeteksi — tap Coba Lagi'
           : 'Menunggu sinyal GPS...';
-    } else if (_isMocked && !_fakeGpsEnabled) {
-      msg = 'Fake GPS terdeteksi — matikan aplikasi mock GPS';
     } else {
       msg = 'Posisi di luar radius store';
     }

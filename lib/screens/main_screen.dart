@@ -37,6 +37,9 @@ class _MainScreenState extends State<MainScreen> {
   void _onGpsStatusChange(ServiceStatus status) {
     if (status == ServiceStatus.disabled && mounted && !_gpsDialogShowing) {
       _showGpsOffDialog();
+    } else if (status == ServiceStatus.enabled && mounted && _gpsDialogShowing) {
+      Navigator.of(context).pop();
+      _gpsDialogShowing = false;
     }
   }
 

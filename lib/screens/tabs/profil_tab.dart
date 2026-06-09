@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../login_screen.dart';
-import '../fake_gps_screen.dart';
 import '../store_settings_screen.dart';
+import '../../services/attendance_service.dart';
 
 class ProfilTab extends StatefulWidget {
   final VoidCallback onLogout;
@@ -37,6 +37,36 @@ class _ProfilTabState extends State<ProfilTab> {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
     return _nama.isEmpty ? '?' : _nama[0].toUpperCase();
+  }
+
+  Future<void> _hapusSemuaAbsensi() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Hapus Semua Data?'),
+        content: const Text('Semua data absensi akan dihapus permanen. Aksi ini tidak bisa dibatalkan.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await AttendanceService().clearRecords();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Semua data absensi berhasil dihapus'),
+        backgroundColor: Color(0xFFFF7043),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -173,15 +203,6 @@ class _ProfilTabState extends State<ProfilTab> {
                     ),
                   ),
                   _MenuRow(
-                    icon: Icons.gps_off_rounded,
-                    label: 'Fake GPS (Test)',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const FakeGpsScreen()),
-                    ),
-                  ),
-                  _MenuRow(
                     icon: Icons.info_outline,
                     label: 'Tentang Aplikasi',
                     onTap: () => showAboutDialog(
@@ -190,6 +211,26 @@ class _ProfilTabState extends State<ProfilTab> {
                       applicationVersion: '2.0.0',
                       applicationLegalese: '© 2026 GrandePos',
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+          // Testing
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _Section(
+                title: 'Testing',
+                children: [
+                  _MenuRow(
+                    icon: Icons.delete_sweep_outlined,
+                    label: 'Hapus Semua Data Absensi',
+                    color: const Color(0xFFE53935),
+                    onTap: _hapusSemuaAbsensi,
                   ),
                 ],
               ),
@@ -303,14 +344,17 @@ class _MenuRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Color? color;
 
   const _MenuRow(
       {required this.icon,
       required this.label,
-      required this.onTap});
+      required this.onTap,
+      this.color});
 
   @override
   Widget build(BuildContext context) {
+    final c = color ?? const Color(0xFF1976D2);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -319,17 +363,17 @@ class _MenuRow extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: const Color(0xFF1976D2)),
+            Icon(icon, size: 20, color: c),
             const SizedBox(width: 14),
             Expanded(
               child: Text(label,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF1A1A2E))),
+                      color: color != null ? c : const Color(0xFF1A1A2E))),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: Colors.grey),
+            Icon(Icons.chevron_right_rounded,
+                size: 18, color: color != null ? c : Colors.grey),
           ],
         ),
       ),
