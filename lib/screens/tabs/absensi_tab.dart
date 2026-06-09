@@ -119,9 +119,8 @@ class AbsensiTabState extends State<AbsensiTab> {
       final fakeLat = prefs.getDouble('dev_fake_lat') ?? -6.2088;
       final fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
       final todayRecord = await _attendanceService.todayRecord();
-      final granted = await _locService.ensurePermission()
-          .timeout(const Duration(seconds: 5), onTimeout: () => false);
       if (!mounted) return;
+      // Tampilkan UI dulu, GPS tracking menyusul di background
       _nameCtrl.text = savedName;
       setState(() {
         _store = store;
@@ -131,7 +130,9 @@ class AbsensiTabState extends State<AbsensiTab> {
         _todayRecord = todayRecord;
         _loading = false;
       });
-      if (granted) _startTracking();
+      final granted = await _locService.ensurePermission()
+          .timeout(const Duration(seconds: 5), onTimeout: () => false);
+      if (granted && mounted) _startTracking();
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }

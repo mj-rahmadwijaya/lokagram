@@ -128,7 +128,10 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   int get _hadirCount => _bulanIni.length;
-  int get _luarZonaCount => _bulanIni.where((r) => !r.isInsideZone).length;
+  int get _luarZonaCount {
+    final now = DateTime.now();
+    return now.day - _hadirCount;
+  }
 
   String _formatTanggal(DateTime dt) {
     return '${_hari[dt.weekday % 7]}, ${dt.day} ${_bulan[dt.month]} ${dt.year}';
@@ -227,9 +230,9 @@ class _HomeTabState extends State<HomeTab> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: _StatCard(
-                                  label: 'Luar Zona',
+                                  label: 'Absen',
                                   value: '$_luarZonaCount Hari',
-                                  icon: Icons.location_off_outlined,
+                                  icon: Icons.event_busy_outlined,
                                   color: const Color(0xFFFF7043),
                                 ),
                               ),
