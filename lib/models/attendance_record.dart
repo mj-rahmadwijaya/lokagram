@@ -1,5 +1,3 @@
-import 'gps_mode.dart';
-
 class AttendanceRecord {
   final String id;
   final String employeeName;
@@ -10,7 +8,7 @@ class AttendanceRecord {
   final double lng;
   final bool isInsideZone;
   final bool isMocked;
-  final GpsMode gpsMode;
+  final String? barcodeData;
 
   const AttendanceRecord({
     required this.id,
@@ -22,7 +20,7 @@ class AttendanceRecord {
     required this.lng,
     required this.isInsideZone,
     required this.isMocked,
-    required this.gpsMode,
+    this.barcodeData,
   });
 
   AttendanceRecord copyWith({DateTime? checkOutTime}) => AttendanceRecord(
@@ -35,7 +33,7 @@ class AttendanceRecord {
         lng: lng,
         isInsideZone: isInsideZone,
         isMocked: isMocked,
-        gpsMode: gpsMode,
+        barcodeData: barcodeData,
       );
 
   Map<String, dynamic> toJson() => {
@@ -48,7 +46,7 @@ class AttendanceRecord {
         'lng': lng,
         'isInsideZone': isInsideZone,
         'isMocked': isMocked,
-        'gpsMode': gpsMode.name,
+        'barcodeData': barcodeData,
       };
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> json) =>
@@ -64,6 +62,6 @@ class AttendanceRecord {
         lng: (json['lng'] as num).toDouble(),
         isInsideZone: json['isInsideZone'] as bool,
         isMocked: json['isMocked'] as bool? ?? false,
-        gpsMode: GpsMode.values.byName(json['gpsMode'] as String),
+        barcodeData: json['barcodeData'] as String?,
       );
 }

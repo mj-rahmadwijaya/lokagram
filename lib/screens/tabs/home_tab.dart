@@ -490,9 +490,10 @@ class _RecordItem extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF1A1A2E))),
                 const SizedBox(height: 2),
-                Text(record.gpsMode.label,
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.grey)),
+                if (record.barcodeData != null)
+                  Text('Barcode: ${record.barcodeData!.length > 12 ? record.barcodeData!.substring(0, 12) + "…" : record.barcodeData!}',
+                      style: const TextStyle(
+                          fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),

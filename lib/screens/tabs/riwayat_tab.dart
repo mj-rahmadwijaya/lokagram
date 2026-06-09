@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../models/attendance_record.dart';
-import '../../models/gps_mode.dart';
 import '../../services/attendance_service.dart';
 
 class RiwayatTab extends StatefulWidget {
@@ -122,16 +121,6 @@ class RiwayatTabState extends State<RiwayatTab> {
     return '$h:$m';
   }
 
-  Color _modeColor(GpsMode m) {
-    switch (m) {
-      case GpsMode.flexible:
-        return const Color(0xFFFF9800);
-      case GpsMode.fixed:
-        return const Color(0xFF1976D2);
-      case GpsMode.antiFake:
-        return const Color(0xFF43A047);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +239,7 @@ class RiwayatTabState extends State<RiwayatTab> {
                               keluar: r?.checkOutTime != null
                                   ? _formatWaktu(r!.checkOutTime!)
                                   : null,
-                              modeColor: r != null ? _modeColor(r.gpsMode) : Colors.grey,
+                              barcodeData: r?.barcodeData,
                             );
                           },
                         ),
@@ -304,20 +293,19 @@ class _RiwayatCard extends StatelessWidget {
   final String tanggal;
   final String? masuk;
   final String? keluar;
-  final Color modeColor;
+  final String? barcodeData;
 
   const _RiwayatCard({
     required this.record,
     required this.tanggal,
     required this.masuk,
     required this.keluar,
-    required this.modeColor,
+    required this.barcodeData,
   });
 
   @override
   Widget build(BuildContext context) {
     final hadir = record != null;
-    final inZone = record?.isInsideZone ?? false;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -422,41 +410,32 @@ class _RiwayatCard extends StatelessWidget {
                           : const Color(0xFFE53935)),
                 ),
               ),
-              if (hadir) ...[
+              if (hadir && barcodeData != null) ...[
                 const SizedBox(height: 6),
-                // GPS mode
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: modeColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                        color: modeColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    record!.gpsMode.label,
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: modeColor),
-                  ),
-                ),
-              ],
-              if (record?.isMocked == true) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFBE9E7),
+                    color: const Color(0xFFE3F2FD),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text('Fake GPS',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFFFF7043))),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.qr_code,
+                          size: 10, color: Color(0xFF1976D2)),
+                      const SizedBox(width: 3),
+                      Text(
+                        barcodeData!.length > 10
+                            ? '${barcodeData!.substring(0, 10)}…'
+                            : barcodeData!,
+                        style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF1976D2)),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ],

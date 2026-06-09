@@ -4,7 +4,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-import '../models/gps_mode.dart';
 import '../models/store.dart';
 import '../services/store_service.dart';
 
@@ -27,7 +26,6 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
 
   late LatLng _pinPosition;
   late double _radius;
-  late GpsMode _gpsMode;
   bool _isLoadingLocation = false;
 
   @override
@@ -37,12 +35,10 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
     if (store != null) {
       _pinPosition = LatLng(store.lat, store.lng);
       _radius = store.radiusMeters;
-      _gpsMode = store.gpsMode;
       _nameController.text = store.name;
     } else {
       _pinPosition = _defaultCenter;
       _radius = _defaultRadius;
-      _gpsMode = GpsMode.fixed;
     }
   }
 
@@ -109,7 +105,6 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
       lat: _pinPosition.latitude,
       lng: _pinPosition.longitude,
       radiusMeters: _radius,
-      gpsMode: _gpsMode,
     ));
     if (mounted) Navigator.pop(context);
   }
@@ -145,39 +140,6 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                     padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Icon(Icons.store, size: 18, color: Colors.grey),
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Mode GPS',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                SegmentedButton<GpsMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: GpsMode.flexible,
-                      label: Text('Flexible'),
-                      icon: Icon(Icons.touch_app),
-                    ),
-                    ButtonSegment(
-                      value: GpsMode.fixed,
-                      label: Text('Fixed GPS'),
-                      icon: Icon(Icons.gps_fixed),
-                    ),
-                    ButtonSegment(
-                      value: GpsMode.antiFake,
-                      label: Text('Anti Fake'),
-                      icon: Icon(Icons.security),
-                    ),
-                  ],
-                  selected: {_gpsMode},
-                  onSelectionChanged: (modes) =>
-                      setState(() => _gpsMode = modes.first),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _gpsMode.description,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 12),
                 Row(

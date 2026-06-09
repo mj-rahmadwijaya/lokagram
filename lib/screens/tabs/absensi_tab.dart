@@ -8,11 +8,11 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/attendance_record.dart';
-import '../../models/gps_mode.dart';
 import '../../models/store.dart';
 import '../../services/attendance_service.dart';
 import '../../services/location_service.dart';
 import '../../services/store_service.dart';
+import '../barcode_scan_screen.dart';
 import '../camera_screen.dart';
 import '../store_settings_screen.dart';
 
@@ -40,14 +40,10 @@ class AbsensiTabState extends State<AbsensiTab> {
   StreamSubscription<Position>? _posSub;
   StreamSubscription<ServiceStatus>? _serviceSub;
 
-  // Fake GPS
+  // Fake GPS (untuk test)
   bool _fakeGpsEnabled = false;
   double _fakeLat = -6.2088;
   double _fakeLng = 106.8456;
-
-  // Flexible mode — pin yang bisa digeser di peta
-  LatLng? _flexPin;
-  final _mapCtrl = MapController();
 
   // Clock
   Timer? _clockTimer;
@@ -68,7 +64,6 @@ class AbsensiTabState extends State<AbsensiTab> {
     _clockTimer = Timer.periodic(
         const Duration(seconds: 1),
         (_) { if (mounted) setState(() => _now = DateTime.now()); });
-    // Listen GPS service — mulai tracking otomatis saat GPS dinyalakan
     _serviceSub = Geolocator.getServiceStatusStream().listen((status) {
       if (status == ServiceStatus.enabled && mounted) {
         _refreshFakeGps().then((_) => _startTracking());
@@ -82,14 +77,11 @@ class AbsensiTabState extends State<AbsensiTab> {
     _serviceSub?.cancel();
     _clockTimer?.cancel();
     _nameCtrl.dispose();
-    _mapCtrl.dispose();
     super.dispose();
   }
 
-  // Dipanggil MainScreen setiap kali tab Absensi dipilih
   Future<void> refresh() async {
     await _refreshFakeGps();
-    // Restart tracking agar posisi terbaru diambil
     final granted = await _locService.ensurePermission()
         .timeout(const Duration(seconds: 3), onTimeout: () => false);
     if (granted && mounted) _startTracking();
@@ -120,7 +112,6 @@ class AbsensiTabState extends State<AbsensiTab> {
       final fakeLng = prefs.getDouble('dev_fake_lng') ?? 106.8456;
       final todayRecord = await _attendanceService.todayRecord();
       if (!mounted) return;
-      // Tampilkan UI dulu, GPS tracking menyusul di background
       _nameCtrl.text = savedName;
       setState(() {
         _store = store;
@@ -145,7 +136,10 @@ class AbsensiTabState extends State<AbsensiTab> {
 
     final last = await _locService.getLastKnownPosition();
     if (last != null && mounted) {
-      setState(() { _position = last; _isMocked = _fakeGpsEnabled || last.isMocked; });
+      setState(() {
+        _position = last;
+        _isMocked = _fakeGpsEnabled || last.isMocked;
+      });
     }
 
     Future.delayed(const Duration(seconds: 8), () {
@@ -154,12 +148,20 @@ class AbsensiTabState extends State<AbsensiTab> {
 
     _locService.getNetworkPosition().then((p) {
       if (p != null && mounted && _position == null) {
-        setState(() { _position = p; _isMocked = _fakeGpsEnabled || p.isMocked; _gpsTimeout = false; });
+        setState(() {
+          _position = p;
+          _isMocked = _fakeGpsEnabled || p.isMocked;
+          _gpsTimeout = false;
+        });
       }
     });
 
     _posSub = _locService.positionStream().listen((p) {
-      if (mounted) setState(() { _position = p; _isMocked = _fakeGpsEnabled || p.isMocked; _gpsTimeout = false; });
+      if (mounted) setState(() {
+        _position = p;
+        _isMocked = _fakeGpsEnabled || p.isMocked;
+        _gpsTimeout = false;
+      });
     });
   }
 
@@ -168,34 +170,21 @@ class AbsensiTabState extends State<AbsensiTab> {
     if (mounted) setState(() => _store = store);
   }
 
-  bool get _isFlexible => _store?.gpsMode == GpsMode.flexible;
-
-  double get _effectiveLat {
-    if (_isFlexible) return _flexPin?.latitude ?? (_position?.latitude ?? 0);
-    if (_fakeGpsEnabled) return _fakeLat;
-    return _position?.latitude ?? 0;
-  }
-
-  double get _effectiveLng {
-    if (_isFlexible) return _flexPin?.longitude ?? (_position?.longitude ?? 0);
-    if (_fakeGpsEnabled) return _fakeLng;
-    return _position?.longitude ?? 0;
-  }
-
-  bool get _hasPosition {
-    if (_isFlexible) return _flexPin != null || _position != null;
-    return _fakeGpsEnabled || _position != null;
-  }
+  // GPS efektif: jika fake GPS aktif (untuk test), pakai koordinat fake
+  double get _effectiveLat => _fakeGpsEnabled ? _fakeLat : (_position?.latitude ?? 0);
+  double get _effectiveLng => _fakeGpsEnabled ? _fakeLng : (_position?.longitude ?? 0);
+  bool get _hasPosition => _fakeGpsEnabled || _position != null;
 
   bool get _isValid {
     final store = _store;
     if (store == null) return false;
     if (!_hasPosition) return false;
-    if (store.gpsMode == GpsMode.antiFake && _isMocked) return false;
+    if (_isMocked && !_fakeGpsEnabled) return false; // blokir fake GPS asli
     return _locService.isInsideZone(_effectiveLat, _effectiveLng, store);
   }
 
   Future<void> _checkIn() async {
+    // Konfirmasi
     final confirmed = await showShadSheet<bool>(
       context: context,
       side: ShadSheetSide.bottom,
@@ -206,8 +195,7 @@ class AbsensiTabState extends State<AbsensiTab> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 decoration: BoxDecoration(
                   color: Colors.grey[300],
                   borderRadius: BorderRadius.circular(2),
@@ -215,10 +203,9 @@ class AbsensiTabState extends State<AbsensiTab> {
               ),
               const SizedBox(height: 20),
               Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
+                width: 72, height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE8F5E9),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.camera_front,
@@ -230,7 +217,7 @@ class AbsensiTabState extends State<AbsensiTab> {
                       fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text(
-                'Pastikan wajah terlihat jelas di kamera depan.',
+                'Foto selfie → scan barcode → presensi tercatat.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey[500], fontSize: 13),
               ),
@@ -240,7 +227,7 @@ class AbsensiTabState extends State<AbsensiTab> {
                 child: ShadButton(
                   onPressed: () => Navigator.pop(ctx, true),
                   leading: const Icon(Icons.camera_alt, size: 16),
-                  child: const Text('Buka Kamera'),
+                  child: const Text('Mulai'),
                 ),
               ),
               const SizedBox(height: 8),
@@ -258,25 +245,45 @@ class AbsensiTabState extends State<AbsensiTab> {
     );
     if (confirmed != true || !mounted) return;
 
-    final store = _store!;
-    final result = await Navigator.push<bool>(
+    // Step 1: Foto selfie
+    final photo = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CameraScreen(
           employeeName: _nameCtrl.text.trim(),
-          lat: _effectiveLat,
-          lng: _effectiveLng,
-          store: store,
-          isMocked: _isMocked,
         ),
       ),
     );
-    if (result == true && mounted) {
-      final today = await _attendanceService.todayRecord();
-      if (mounted) setState(() => _todayRecord = today);
-      ShadToaster.of(context).show(const ShadToast(
-          description: Text('Check in berhasil!')));
-    }
+    if (photo == null || !mounted) return;
+
+    // Step 2: Scan barcode
+    final barcode = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScanScreen()),
+    );
+    if (barcode == null || !mounted) return;
+
+    // Step 3: Simpan record
+    final store = _store!;
+    final now = DateTime.now();
+    final record = AttendanceRecord(
+      id: now.millisecondsSinceEpoch.toString(),
+      employeeName: _nameCtrl.text.trim(),
+      timestamp: now,
+      photoPath: photo.path,
+      lat: _effectiveLat,
+      lng: _effectiveLng,
+      isInsideZone: _locService.isInsideZone(_effectiveLat, _effectiveLng, store),
+      isMocked: _isMocked,
+      barcodeData: barcode,
+    );
+    await _attendanceService.saveRecord(record);
+    if (!mounted) return;
+    final today = await _attendanceService.todayRecord();
+    if (!mounted) return;
+    setState(() => _todayRecord = today);
+    ShadToaster.of(context).show(const ShadToast(
+        description: Text('Check in berhasil!')));
   }
 
   Future<void> _checkOut() async {
@@ -348,8 +355,7 @@ class AbsensiTabState extends State<AbsensiTab> {
     );
     if (confirmed != true || !mounted) return;
 
-    await _attendanceService.saveCheckOut(
-        _todayRecord!.id, DateTime.now());
+    await _attendanceService.saveCheckOut(_todayRecord!.id, DateTime.now());
     final today = await _attendanceService.todayRecord();
     if (!mounted) return;
     setState(() => _todayRecord = today);
@@ -402,19 +408,12 @@ class AbsensiTabState extends State<AbsensiTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Peta
                   _buildMap(),
                   const SizedBox(height: 16),
-
-                  // Info Lokasi
                   _buildLocationInfo(),
                   const SizedBox(height: 20),
-
-                  // Jam digital
                   _buildClock(),
                   const SizedBox(height: 24),
-
-                  // Tombol Check In
                   _buildButtons(),
                 ],
               ),
@@ -424,8 +423,6 @@ class AbsensiTabState extends State<AbsensiTab> {
 
   Widget _buildMap() {
     final store = _store;
-    final pos = _position;
-
     if (store == null) {
       return Container(
         height: 200,
@@ -455,32 +452,26 @@ class AbsensiTabState extends State<AbsensiTab> {
     final storePos = LatLng(store.lat, store.lng);
     final empPos = _hasPosition
         ? LatLng(_effectiveLat, _effectiveLng)
-        : (pos != null ? LatLng(pos.latitude, pos.longitude) : null);
+        : (_position != null
+            ? LatLng(_position!.latitude, _position!.longitude)
+            : null);
 
-    final isFlexible = store.gpsMode == GpsMode.flexible;
-
-    final mapOptions = isFlexible
+    final mapOptions = empPos != null
         ? MapOptions(
-            initialCenter: _flexPin ?? storePos,
-            initialZoom: 16,
-            onTap: (_, point) => setState(() => _flexPin = point),
+            initialCameraFit: CameraFit.bounds(
+              bounds: LatLngBounds.fromPoints([storePos, empPos]),
+              padding: const EdgeInsets.all(60),
+              maxZoom: 17,
+            ),
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.none),
           )
-        : empPos != null
-            ? MapOptions(
-                initialCameraFit: CameraFit.bounds(
-                  bounds: LatLngBounds.fromPoints([storePos, empPos]),
-                  padding: const EdgeInsets.all(60),
-                  maxZoom: 17,
-                ),
-                interactionOptions:
-                    const InteractionOptions(flags: InteractiveFlag.none),
-              )
-            : MapOptions(
-                initialCenter: storePos,
-                initialZoom: 16,
-                interactionOptions:
-                    const InteractionOptions(flags: InteractiveFlag.none),
-              );
+        : MapOptions(
+            initialCenter: storePos,
+            initialZoom: 16,
+            interactionOptions:
+                const InteractionOptions(flags: InteractiveFlag.none),
+          );
 
     return Container(
       height: 220,
@@ -496,76 +487,48 @@ class AbsensiTabState extends State<AbsensiTab> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Stack(
+        child: FlutterMap(
+          options: mapOptions,
           children: [
-            FlutterMap(
-              mapController: _mapCtrl,
-              options: mapOptions,
-              children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'io.grandepos.lokagram',
-                ),
-                CircleLayer(circles: [
-                  CircleMarker(
-                    point: storePos,
-                    radius: store.radiusMeters,
-                    useRadiusInMeter: true,
-                    color: const Color(0xFF1976D2).withValues(alpha: 0.12),
-                    borderColor: const Color(0xFF1976D2),
-                    borderStrokeWidth: 2,
-                  ),
-                ]),
-                MarkerLayer(markers: [
-                  Marker(
-                    point: storePos,
-                    width: 40,
-                    height: 40,
-                    alignment: Alignment.topCenter,
-                    child: const Icon(Icons.store_rounded,
-                        color: Color(0xFF1976D2), size: 36),
-                  ),
-                  if (empPos != null)
-                    Marker(
-                      point: empPos,
-                      width: 40,
-                      height: 40,
-                      alignment: Alignment.topCenter,
-                      child: Icon(
-                        isFlexible
-                            ? Icons.location_pin
-                            : Icons.person_pin_circle_rounded,
-                        color: _isValid
-                            ? const Color(0xFF43A047)
-                            : const Color(0xFFFF7043),
-                        size: 36,
-                      ),
-                    ),
-                ]),
-              ],
+            TileLayer(
+              urlTemplate:
+                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'io.grandepos.lokagram',
             ),
-            // Hint tap untuk flexible mode
-            if (isFlexible)
-              Positioned(
-                bottom: 8,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Text(
-                      'Tap di peta untuk set lokasi Anda',
-                      style: TextStyle(color: Colors.white, fontSize: 11),
-                    ),
+            CircleLayer(circles: [
+              CircleMarker(
+                point: storePos,
+                radius: store.radiusMeters,
+                useRadiusInMeter: true,
+                color: const Color(0xFF1976D2).withValues(alpha: 0.12),
+                borderColor: const Color(0xFF1976D2),
+                borderStrokeWidth: 2,
+              ),
+            ]),
+            MarkerLayer(markers: [
+              Marker(
+                point: storePos,
+                width: 40,
+                height: 40,
+                alignment: Alignment.topCenter,
+                child: const Icon(Icons.store_rounded,
+                    color: Color(0xFF1976D2), size: 36),
+              ),
+              if (empPos != null)
+                Marker(
+                  point: empPos,
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.topCenter,
+                  child: Icon(
+                    Icons.person_pin_circle_rounded,
+                    color: _isValid
+                        ? const Color(0xFF43A047)
+                        : const Color(0xFFFF7043),
+                    size: 36,
                   ),
                 ),
-              ),
+            ]),
           ],
         ),
       ),
@@ -581,33 +544,15 @@ class AbsensiTabState extends State<AbsensiTab> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-            ),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
           ],
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Icon(Icons.location_on_outlined,
-                color: Colors.grey, size: 28),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Lokasi Toko',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 2),
-                  const Text('Store belum dikonfigurasi',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                ],
-              ),
-            ),
+            Icon(Icons.location_on_outlined, color: Colors.grey, size: 28),
+            SizedBox(width: 12),
+            Text('Store belum dikonfigurasi',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           ],
         ),
       );
@@ -635,8 +580,7 @@ class AbsensiTabState extends State<AbsensiTab> {
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 44, height: 44,
             decoration: BoxDecoration(
               color: const Color(0xFFE3F2FD),
               borderRadius: BorderRadius.circular(12),
@@ -659,11 +603,8 @@ class AbsensiTabState extends State<AbsensiTab> {
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 14)),
                 if (distance != null)
-                  Text(
-                    '${distance.toStringAsFixed(0)}m dari titik store',
-                    style: const TextStyle(
-                        fontSize: 11, color: Colors.grey),
-                  ),
+                  Text('${distance.toStringAsFixed(0)}m dari titik store',
+                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ),
@@ -674,8 +615,7 @@ class AbsensiTabState extends State<AbsensiTab> {
                 _initialize();
               },
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFBE9E7),
                   borderRadius: BorderRadius.circular(8),
@@ -700,7 +640,8 @@ class AbsensiTabState extends State<AbsensiTab> {
   }
 
   Widget _buildStatusBadge(bool inZone) {
-    if (_store?.gpsMode == GpsMode.antiFake && _isMocked) {
+    // Fake GPS asli (bukan dari fitur test) → blokir
+    if (_isMocked && !_fakeGpsEnabled) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
@@ -717,9 +658,7 @@ class AbsensiTabState extends State<AbsensiTab> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: inZone
-            ? const Color(0xFFE8F5E9)
-            : const Color(0xFFFBE9E7),
+        color: inZone ? const Color(0xFFE8F5E9) : const Color(0xFFFBE9E7),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
@@ -727,9 +666,7 @@ class AbsensiTabState extends State<AbsensiTab> {
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: inZone
-              ? const Color(0xFF43A047)
-              : const Color(0xFFFF7043),
+          color: inZone ? const Color(0xFF43A047) : const Color(0xFFFF7043),
         ),
       ),
     );
@@ -762,28 +699,23 @@ class AbsensiTabState extends State<AbsensiTab> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            _dateStr(),
-            style: const TextStyle(
-                fontSize: 13, color: Colors.grey),
-          ),
-          const SizedBox(height: 12),
-          // GPS mode badge
-          if (_store != null)
+          Text(_dateStr(),
+              style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          if (_fakeGpsEnabled) ...[
+            const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
+                color: const Color(0xFFFFF3E0),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                'Mode: ${_store!.gpsMode.label}',
-                style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF1976D2),
-                    fontWeight: FontWeight.w500),
-              ),
+              child: const Text('Mode Test: Fake GPS Aktif',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFF57F17),
+                      fontWeight: FontWeight.w500)),
             ),
+          ],
         ],
       ),
     );
@@ -797,7 +729,6 @@ class AbsensiTabState extends State<AbsensiTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Status selesai
         if (checkedIn && checkedOut) ...[
           Container(
             padding: const EdgeInsets.symmetric(vertical: 18),
@@ -819,7 +750,6 @@ class AbsensiTabState extends State<AbsensiTab> {
             ),
           ),
         ] else if (!checkedIn) ...[
-          // Check In
           SizedBox(
             height: 56,
             child: ElevatedButton.icon(
@@ -843,7 +773,6 @@ class AbsensiTabState extends State<AbsensiTab> {
             _buildHint(),
           ],
         ] else ...[
-          // Check Out
           SizedBox(
             height: 56,
             child: ElevatedButton.icon(
@@ -867,9 +796,7 @@ class AbsensiTabState extends State<AbsensiTab> {
             _buildHint(),
           ],
         ],
-
         const SizedBox(height: 12),
-        // Lihat Riwayat
         SizedBox(
           height: 48,
           child: OutlinedButton.icon(
@@ -896,14 +823,13 @@ class AbsensiTabState extends State<AbsensiTab> {
       msg = _gpsTimeout
           ? 'GPS tidak terdeteksi — tap Coba Lagi'
           : 'Menunggu sinyal GPS...';
-    } else if (_store!.gpsMode == GpsMode.antiFake && _isMocked) {
-      msg = 'Matikan fake GPS untuk check in';
+    } else if (_isMocked && !_fakeGpsEnabled) {
+      msg = 'Fake GPS terdeteksi — matikan aplikasi mock GPS';
     } else {
       msg = 'Posisi di luar radius store';
     }
     return Text(msg,
         textAlign: TextAlign.center,
-        style:
-            const TextStyle(color: Colors.grey, fontSize: 12));
+        style: const TextStyle(color: Colors.grey, fontSize: 12));
   }
 }

@@ -1,0 +1,18 @@
+- menu apa aja
+    - page splashscreen
+    - page login
+    - page home presensi ( cek lokasi, button )
+    - page list presensi 
+    - logout
+- UI attendance
+- cek UI POS untuk menu attendance
+    - untuk absensi perlu login ke pos apa tidak ?
+    - qrcode posisi dimana ?
+    - 
+- bikin alur kasaran
+- (addon) register -> activasi ->
+- data api apa yang dibutuhkan untuk attendance
+- berada dilokasi -> scan barcode
+- dari response lokasi pin store
+- lisensi bisnis id tampilkan di attendance
+- 
