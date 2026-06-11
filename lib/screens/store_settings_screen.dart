@@ -197,7 +197,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                           point: _pinPosition,
                           radius: _radius,
                           useRadiusInMeter: true,
-                          color: Colors.blue.withOpacity(0.15),
+                          color: Colors.blue.withValues(alpha: 0.15),
                           borderColor: Colors.blue,
                           borderStrokeWidth: 2,
                         ),
