@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/session.dart';
+import '../services/api_service.dart';
+import '../services/session_service.dart';
 import 'main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,75 +15,154 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailCtrl = TextEditingController();
-  final _sandiCtrl = TextEditingController();
+  final _pinCtrl = TextEditingController();
+  final _apiService = ApiService();
+  final _sessionService = SessionService();
   bool _obscure = true;
   bool _loading = false;
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
-    _sandiCtrl.dispose();
+    _pinCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _masuk() async {
-    final email = _emailCtrl.text.trim();
-    final sandi = _sandiCtrl.text.trim();
-
-    if (email.isEmpty || sandi.isEmpty) {
-      ShadToaster.of(context).show(const ShadToast.destructive(
-          description: Text('Email dan sandi tidak boleh kosong')));
-      return;
-    }
-
-    // Dummy credentials untuk testing
-    const _dummyUser = 'test';
-    const _dummyPass = '123456';
-    final isDummy = email == _dummyUser && sandi == _dummyPass;
-
-    if (!isDummy && !email.contains('@')) {
-      ShadToaster.of(context).show(const ShadToast.destructive(
-          description: Text('Format email tidak valid')));
+  Future<void> _login() async {
+    final pin = _pinCtrl.text.trim();
+    if (pin.isEmpty) {
+      _showToast('PIN tidak boleh kosong', isError: true);
       return;
     }
 
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
 
-    final String name;
-    final String savedEmail;
-    if (isDummy) {
-      name = 'Test';
-      savedEmail = 'test@grandepos.io';
-    } else {
-      // Nama dari email (sebelum @)
-      final raw = email.split('@')[0].replaceAll(RegExp(r'[._]'), ' ');
-      name = raw
-          .split(' ')
-          .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
-          .join(' ');
-      savedEmail = email;
+    try {
+      final deviceId = await _sessionService.getDeviceId();
+      final response = await _apiService.login(
+        pin: pin,
+        uniqueIdDevice: deviceId,
+        timestamp: DateTime.now(),
+      );
+
+      if (!mounted) return;
+
+      if (!response.success) {
+        _showToast(response.message, isError: true);
+        return;
+      }
+
+      final existingSession = await _sessionService.loadSession();
+      final newSession = _buildSession(response, deviceId);
+
+      if (existingSession == null) {
+        await _confirmSaveSession(
+          title: 'Simpan data ke device?',
+          body: 'Data karyawan dan outlet akan disimpan di device ini.',
+          session: newSession,
+        );
+      } else {
+        final cocok = existingSession.staffId == response.karyawan!.staffId &&
+            existingSession.outletId == response.karyawan!.outletId &&
+            existingSession.uniqueId == response.karyawan!.uniqueId;
+
+        if (cocok) {
+          await _confirmSaveSession(
+            title: 'Data cocok, lanjutkan?',
+            body: 'Login sebagai ${newSession.employeeName} di ${newSession.outletName}.',
+            session: newSession,
+          );
+        } else {
+          if (!mounted) return;
+          _showAlert(
+            title: 'Data Tidak Cocok',
+            body: 'Data dari server tidak cocok dengan data device ini. Hubungi admin.',
+          );
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
+  }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('is_logged_in', true);
-    await prefs.setString('user_email', savedEmail);
-    await prefs.setString('employee_name', name);
+  Session _buildSession(LoginResponse response, String deviceId) {
+    final outlet = response.outlet!;
+    final karyawan = response.karyawan!;
+    return Session(
+      token: response.token!,
+      staffId: karyawan.staffId,
+      outletId: karyawan.outletId,
+      uniqueId: karyawan.uniqueId,
+      employeeName: 'Budi Santoso', // dari profile API, sementara hardcode
+      phone: '-',
+      outletName: outlet.name,
+      outletAddress: outlet.alamat,
+      outletLat: outlet.lat,
+      outletLng: outlet.lng,
+      logoUrl: response.logoUrl,
+    );
+  }
 
+  Future<void> _confirmSaveSession({
+    required String title,
+    required String body,
+    required Session session,
+  }) async {
     if (!mounted) return;
-    setState(() => _loading = false);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Tidak'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ya'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (ok != true) return;
+
+    await _sessionService.saveSession(session);
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(PageRouteBuilder(
-      pageBuilder: (_, __, ___) => const MainScreen(),
-      transitionsBuilder: (_, anim, __, child) =>
+      pageBuilder: (context, a, b) => const MainScreen(),
+      transitionsBuilder: (context, anim, b, child) =>
           FadeTransition(opacity: anim, child: child),
       transitionDuration: const Duration(milliseconds: 300),
     ));
   }
 
-  void _belumTersedia() {
-    ShadToaster.of(context).show(
-        const ShadToast(description: Text('Fitur belum tersedia')));
+  void _showAlert({required String title, required String body}) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showToast(String msg, {bool isError = false}) {
+    if (isError) {
+      ShadToaster.of(context).show(ShadToast.destructive(
+          description: Text(msg)));
+    } else {
+      ShadToaster.of(context).show(ShadToast(description: Text(msg)));
+    }
   }
 
   @override
@@ -93,7 +176,6 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 56),
-              // Ikon kecil
               Container(
                 width: 48,
                 height: 48,
@@ -101,51 +183,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: const Color(0xFFE3F2FD),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.event_available_rounded,
-                    color: Color(0xFF1976D2), size: 28),
+                child: const Icon(Icons.lock_outline_rounded,
+                    color: Color(0xFF1976D2), size: 26),
               ),
               const SizedBox(height: 24),
               const Text(
-                'Selamat Datang',
+                'Masukkan PIN',
                 style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1A1A2E)),
               ),
               const SizedBox(height: 6),
-              Text('Presensi menjadi mudah!',
+              Text('Gunakan PIN yang diberikan oleh admin.',
                   style: TextStyle(fontSize: 14, color: Colors.grey[500])),
               const SizedBox(height: 36),
-
-              // Email
-              const Text('Email',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const Text('PIN',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 6),
               ShadInput(
-                controller: _emailCtrl,
-                placeholder: const Text('Masukkan email'),
+                controller: _pinCtrl,
+                placeholder: const Text('Masukkan PIN'),
                 leading: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.email_outlined,
-                      size: 18, color: Colors.grey),
-                ),
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 16),
-
-              // Sandi
-              const Text('Sandi',
-                  style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              ShadInput(
-                controller: _sandiCtrl,
-                placeholder: const Text('Masukkan sandi'),
-                leading: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Icon(Icons.lock_outline,
+                  child: Icon(Icons.dialpad_rounded,
                       size: 18, color: Colors.grey),
                 ),
                 trailing: GestureDetector(
@@ -162,38 +224,30 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 obscureText: _obscure,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _masuk(),
+                onSubmitted: (_) => _loading ? null : _login(),
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: _belumTersedia,
-                  child: const Text('Lupa kata sandi?',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF1976D2),
-                          fontWeight: FontWeight.w500)),
-                ),
-              ),
-              const SizedBox(height: 28),
-
-              // Tombol Masuk
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 child: ShadButton(
-                  onPressed: _loading ? null : _masuk,
+                  onPressed: _loading ? null : _login,
                   child: _loading
                       ? const SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white))
-                      : const Text('Masuk'),
+                      : const Text('Login'),
                 ),
               ),
               const SizedBox(height: 24),
+              Center(
+                child: Text('PIN: 1234  (dummy)',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+              ),
             ],
           ),
         ),
