@@ -9,6 +9,7 @@
 - **Prasyarat:** PRD Belajar Nix selesai (Tahap 1–4 ✅) — paham Flakes
 - **Status terkini:** SELESAI ✅ — semua Tahap 1–4 dan tujuan G1–G5 tercapai 🎉
 - **Lanjutan:** App dikembangkan menjadi Attendance App — branch `attendance-3` di repo `lokagram`
+- **Fase berikutnya:** Redesign alur ke PIN login + API backend — lihat `task.md`
 
 ---
 
@@ -188,6 +189,7 @@ androidSdk = (pkgs.androidenv.composeAndroidPackages {
 | 2026-06-09 | **Fix AbsensiTab loading terus.** `_loading = false` dipindah sebelum `ensurePermission()` agar UI langsung tampil — GPS tracking berjalan di background setelahnya. Sebelumnya: jika `!mounted` terpenuhi setelah await permission, `_loading` tidak pernah di-set false sehingga spinner tidak berhenti. | Race condition: `if (!mounted) return` sebelum `setState(_loading = false)` bisa ter-trigger saat tab switching cepat. |
 | 2026-06-09 | **Branch `attendance-3` — GPS device-only + scan barcode.** Branch baru dengan konsep: GPS hanya dari device (tidak ada flexible/fixed mode), blokir fake GPS via `Position.isMocked`. Alur check-in: scan barcode → simpan (selfie dihapus). Tambah `mobile_scanner ^6.0.0`. Screen baru: `BarcodeScanScreen` dengan frame hijau 260×260, flash toggle, kamera belakang. `AttendanceRecord` tambah field `barcodeData`. | Analyze error awal: referensi `gpsMode` di home_screen/history_screen yang sudah dihapus → delete file-file tersebut. |
 | 2026-06-09 | **Perbaikan fake GPS blocking & UX attendance-3.** Tombol Check In/Out di-disable + banner merah "Fake GPS Terdeteksi!" tampil real-time di layar saat mock GPS aktif (app pihak ketiga). Dialog GPS mati/hidup real-time: auto-dismiss saat GPS dinyalakan — implementasi di `MainScreen` dan `HomeTab` via `Geolocator.getServiceStatusStream()`. Hapus fitur Fake GPS internal (FakeGpsScreen dihapus), deteksi murni dari `Position.isMocked`. Tambah fitur "Hapus Semua Data Absensi" di tab Profil (section Testing). | Install APK via `adb install` langsung lebih andal daripada `flutter run` karena APK 138MB sering timeout di flutter run install step. |
+| 2026-06-11 | **Redesign alur — wireframe baru, integrasi API.** Alur app dirancang ulang total berdasarkan wireframe dari tim produk. Login ganti dari email/password ke **PIN + unique_id_device + timestamp**. Struktur UI berubah dari 4 tab menjadi single check-in screen + history screen + profile sheet. GPS tidak lagi blokir — hanya tampilkan jarak ke outlet. Alur barcode diperkuat: scan → validasi data device (cocokkan staff_id, outlet_id, unique_id) → konfirmasi → simpan. Semua operasi kini hit API (login, logout, list absensi, profile, checkout) — tahap ini masih dummy, real endpoint menyusul. Auth menggunakan token dari response login. Data karyawan & outlet disimpan lokal di device sebagai `Session`. Detail task di `task.md`. | Perubahan mendasar: app bergerak dari prototype GPS lokal ke app siap integrasi backend GrandePos. |
 
 ---
 
