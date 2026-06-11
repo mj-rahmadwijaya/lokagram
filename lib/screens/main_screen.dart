@@ -29,6 +29,9 @@ class _MainScreenState extends State<MainScreen> {
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
   bool _loggingOut = false;
+  bool _locating = true;
+
+  static const _checkinRadius = 100.0;
 
   static const _hari = [
     'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'
@@ -66,14 +69,44 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _startLocation() async {
     final granted = await _locService.ensurePermission()
         .timeout(const Duration(seconds: 5), onTimeout: () => false);
-    if (!granted || !mounted) return;
-    _locService.positionStream().listen((p) {
-      if (mounted) setState(() => _position = p);
-    });
-    final last = await _locService.getLastKnownPosition();
-    if (last != null && mounted && _position == null) {
-      setState(() => _position = last);
+    if (!granted || !mounted) {
+      setState(() => _locating = false);
+      return;
     }
+
+    // Last known position → instant fill
+    final last = await _locService.getLastKnownPosition();
+    if (last != null && mounted) {
+      setState(() { _position = last; _locating = false; });
+    }
+
+    // Live stream dengan distanceFilter:0 → update tiap pergerakan
+    _locService.positionStream().listen((p) {
+      if (mounted) setState(() { _position = p; _locating = false; });
+    });
+
+    // Fallback: low-accuracy cepat jika last known kosong
+    if (last == null) {
+      final net = await _locService.getNetworkPosition();
+      if (net != null && mounted && _position == null) {
+        setState(() { _position = net; _locating = false; });
+      }
+    }
+  }
+
+  double? get _distanceMeters {
+    final session = _session;
+    final pos = _position;
+    if (session == null || pos == null) return null;
+    return Geolocator.distanceBetween(
+      pos.latitude, pos.longitude,
+      session.outletLat, session.outletLng,
+    );
+  }
+
+  bool get _isInRange {
+    final d = _distanceMeters;
+    return d != null && d <= _checkinRadius;
   }
 
   String _clockStr() {
@@ -88,15 +121,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   String _distanceStr() {
-    final session = _session;
-    final pos = _position;
-    if (session == null || pos == null) return 'Mengukur jarak...';
-    final dist = Geolocator.distanceBetween(
-      pos.latitude, pos.longitude,
-      session.outletLat, session.outletLng,
-    );
-    final radius = 100; // default radius meter
-    return 'Jarak ${dist.toStringAsFixed(0)}m / ${radius}m dari outlet';
+    if (_locating || _position == null) return 'Mengukur jarak...';
+    final d = _distanceMeters;
+    if (d == null) return 'Mengukur jarak...';
+    return '${d.toStringAsFixed(0)}m dari outlet (radius ${_checkinRadius.toInt()}m)';
   }
 
   Future<void> _checkin() async {
@@ -138,12 +166,19 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     if (!mounted) return;
-    Navigator.push(
+    final confirmed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => CheckinConfirmScreen(session: _session!),
       ),
     );
+
+    if (confirmed == true && mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const HistoryScreen()),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -227,14 +262,6 @@ class _MainScreenState extends State<MainScreen> {
               color: Color(0xFF1A1A2E)),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.history_rounded, color: Color(0xFF1976D2)),
-            tooltip: 'Riwayat',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HistoryScreen()),
-            ),
-          ),
           _loggingOut
               ? const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
@@ -272,34 +299,64 @@ class _MainScreenState extends State<MainScreen> {
             const SizedBox(height: 32),
 
             // Jarak
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.location_on_rounded,
-                      size: 16, color: Color(0xFF1976D2)),
-                  const SizedBox(width: 6),
-                  Text(
-                    _distanceStr(),
-                    style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF1976D2),
-                        fontWeight: FontWeight.w500),
-                  ),
-                ],
-              ),
-            ),
+            Builder(builder: (context) {
+              final loading = _locating || _position == null;
+              final inRange = !loading && _isInRange;
+              final outRange = !loading && !_isInRange;
+              final pillColor = loading
+                  ? Colors.grey[100]!
+                  : inRange
+                      ? const Color(0xFFE8F5E9)
+                      : const Color(0xFFFCE4EC);
+              final iconColor = loading
+                  ? Colors.grey
+                  : inRange
+                      ? const Color(0xFF43A047)
+                      : const Color(0xFFE53935);
+              final textColor = iconColor;
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: pillColor,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 6,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (loading)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.grey),
+                      )
+                    else
+                      Icon(
+                        outRange
+                            ? Icons.location_off_rounded
+                            : Icons.location_on_rounded,
+                        size: 16,
+                        color: iconColor,
+                      ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _distanceStr(),
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: textColor,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              );
+            }),
             const SizedBox(height: 28),
 
             // Jam
@@ -328,7 +385,7 @@ class _MainScreenState extends State<MainScreen> {
             SizedBox(
               height: 60,
               child: ElevatedButton.icon(
-                onPressed: _checkin,
+                onPressed: _isInRange ? _checkin : null,
                 icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
                 label: const Text('Checkin',
                     style: TextStyle(
