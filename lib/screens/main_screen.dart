@@ -9,6 +9,10 @@ import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/session_service.dart';
 import '../services/store_service.dart';
+import '../widgets/app_theme.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import '../widgets/gradient_scaffold.dart';
 import 'barcode_scan_screen.dart';
 import 'checkin_confirm_screen.dart';
 import 'history_screen.dart';
@@ -231,7 +235,8 @@ class _MainScreenState extends State<MainScreen> {
     return showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        surfaceTintColor: Colors.white,
         title: Text(title),
         content: Text(body),
         actions: [
@@ -252,7 +257,8 @@ class _MainScreenState extends State<MainScreen> {
     return showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        surfaceTintColor: Colors.white,
         title: Text(title),
         content: Text(body),
         actions: [
@@ -267,202 +273,194 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: Text(
-          _store?.name ?? _session?.outletName ?? 'Attendance',
-          style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 17,
-              color: Color(0xFF1A1A2E)),
-        ),
-        actions: [
-          _loggingOut
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : TextButton(
-                  onPressed: _logout,
-                  child: const Text('logout',
-                      style: TextStyle(color: Color(0xFFE53935))),
-                ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Banner fake GPS
-          if (_isFakeGps)
-            Container(
-              color: const Color(0xFFE53935),
-              width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: const Row(
+    return GradientScaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header: nama outlet + tombol logout
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+              child: Row(
                 children: [
-                  Icon(Icons.warning_rounded,
-                      color: Colors.white, size: 16),
-                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Fake GPS terdeteksi! Matikan aplikasi pemalsuan lokasi.',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600),
+                      _store?.name ?? _session?.outletName ?? 'Attendance',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textOnGrad,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
+                  _loggingOut
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.textOnGrad,
+                          ),
+                        )
+                      : IconButton(
+                          onPressed: _logout,
+                          icon: const Icon(
+                            Icons.logout_rounded,
+                            color: AppColors.textOnGrad,
+                          ),
+                        ),
                 ],
               ),
             ),
 
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Logo
-                  Center(
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFE3F2FD),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.event_available_rounded,
-                          size: 56, color: Color(0xFF1976D2)),
-                    ),
+            // Banner Fake GPS
+            if (_isFakeGps)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorGlass,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 32),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_rounded, color: Colors.white, size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Fake GPS terdeteksi! Matikan aplikasi pemalsuan lokasi.',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
-                  // Pill jarak / status GPS
-                  Builder(builder: (context) {
-                    final pillColor = _isFakeGps
-                        ? const Color(0xFFFCE4EC)
-                        : (_locating || _position == null)
-                            ? Colors.grey[100]!
-                            : _isInRange
-                                ? const Color(0xFFE8F5E9)
-                                : const Color(0xFFFCE4EC);
-                    final iconColor = _isFakeGps
-                        ? const Color(0xFFE53935)
-                        : (_locating || _position == null)
-                            ? Colors.grey
-                            : _isInRange
-                                ? const Color(0xFF43A047)
-                                : const Color(0xFFE53935);
-
-                    return Container(
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Jam besar
+                    GlassCard(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: pillColor,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 6,
+                          horizontal: 24, vertical: 28),
+                      child: Column(
+                        children: [
+                          Text(
+                            _clockStr(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 52,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textOnGrad,
+                              fontFeatures: [FontFeature.tabularFigures()],
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _dateStr(),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSubOnGrad,
+                            ),
                           ),
                         ],
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_locating && !_isFakeGps)
-                            const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.grey),
-                            )
-                          else
-                            Icon(
-                              _isFakeGps
-                                  ? Icons.warning_rounded
-                                  : _isInRange
-                                      ? Icons.location_on_rounded
-                                      : Icons.location_off_rounded,
-                              size: 16,
-                              color: iconColor,
-                            ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _distanceStr(),
-                            style: TextStyle(
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Pill status GPS
+                    Builder(builder: (context) {
+                      final Color iconColor;
+                      if (_isFakeGps) {
+                        iconColor = AppColors.errorGlass;
+                      } else if (_locating || _position == null) {
+                        iconColor = Colors.white60;
+                      } else if (_isInRange) {
+                        iconColor = AppColors.successGlass;
+                      } else {
+                        iconColor = AppColors.errorGlass;
+                      }
+
+                      return GlassCard(
+                        borderRadius: 12,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_locating && !_isFakeGps)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white60),
+                              )
+                            else
+                              Icon(
+                                _isFakeGps
+                                    ? Icons.warning_rounded
+                                    : _isInRange
+                                        ? Icons.location_on_rounded
+                                        : Icons.location_off_rounded,
+                                size: 16,
+                                color: iconColor,
+                              ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _distanceStr(),
+                              style: TextStyle(
                                 fontSize: 13,
                                 color: iconColor,
-                                fontWeight: FontWeight.w500),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 32),
+
+                    // Tombol Checkin
+                    GradientButton(
+                      height: 60,
+                      // Kondisi persis dari kode sebelumnya: (!_isFakeGps && _isInRange)
+                      onPressed: (!_isFakeGps && _isInRange) ? _checkin : null,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.qr_code_scanner_rounded,
+                              size: 22, color: Colors.white),
+                          const SizedBox(width: 10),
+                          Text(
+                            _isFakeGps ? 'Fake GPS Aktif' : 'Checkin',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 28),
-
-                  // Jam
-                  Text(
-                    _clockStr(),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 52,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A2E),
-                      fontFeatures: [FontFeature.tabularFigures()],
-                      letterSpacing: 2,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Tanggal
-                  Text(
-                    _dateStr(),
-                    textAlign: TextAlign.center,
-                    style:
-                        const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 48),
-
-                  // Tombol Checkin
-                  SizedBox(
-                    height: 60,
-                    child: ElevatedButton.icon(
-                      onPressed:
-                          (!_isFakeGps && _isInRange) ? _checkin : null,
-                      icon: const Icon(Icons.qr_code_scanner_rounded,
-                          size: 22),
-                      label: Text(
-                        _isFakeGps
-                            ? 'Fake GPS Aktif'
-                            : 'Checkin',
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1976D2),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
-                        disabledBackgroundColor:
-                            const Color(0xFFBDBDBD),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

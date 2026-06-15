@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import '../services/session_service.dart';
 import '../services/store_service.dart';
+import '../widgets/app_theme.dart';
+import '../widgets/gradient_scaffold.dart';
 import 'login_screen.dart';
 import 'main_screen.dart';
 import 'store_settings_screen.dart';
@@ -69,8 +71,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return GradientScaffold(
       body: FadeTransition(
         opacity: _fade,
         child: Center(
@@ -79,15 +80,29 @@ class _SplashScreenState extends State<SplashScreen>
             children: [
               ScaleTransition(
                 scale: _scale,
-                child: Image.asset(
-                  'assets/logo.png',
-                  width: 220,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.white.withAlpha(51),
+                        blurRadius: 32,
+                        spreadRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/logo.png',
+                    width: 220,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
+              const Text(
                 'Presensi, izin dan cuti',
-                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSubOnGrad,
+                ),
               ),
               const SizedBox(height: 60),
               Row(
@@ -98,8 +113,8 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 8,
                   decoration: BoxDecoration(
                     color: i == 0
-                        ? const Color(0xFF1976D2)
-                        : const Color(0xFFBBDEFB),
+                        ? AppColors.textOnGrad
+                        : AppColors.glassBorder,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 )),

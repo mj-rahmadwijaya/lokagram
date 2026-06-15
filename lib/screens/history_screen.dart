@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/session.dart';
 import '../services/api_service.dart';
 import '../services/session_service.dart';
+import '../widgets/app_theme.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import '../widgets/gradient_scaffold.dart';
 import 'profile_sheet.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -106,14 +110,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+    return GradientScaffold(
       body: Column(
         children: [
           _buildHeader(),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.textOnGrad,
+                    ),
+                  )
                 : _items.isEmpty
                     ? _buildEmpty()
                     : ListView.separated(
@@ -122,11 +129,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         itemCount: _items.length,
                         separatorBuilder: (context, i) =>
                             const SizedBox(height: 10),
-                        itemBuilder: (_, i) =>
-                            _AbsensiCard(
-                              item: _items[i],
-                              tanggal: _formatTanggal(_items[i].tanggal),
-                            ),
+                        itemBuilder: (_, i) => _AbsensiCard(
+                          item: _items[i],
+                          tanggal: _formatTanggal(_items[i].tanggal),
+                        ),
                       ),
           ),
         ],
@@ -137,11 +143,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildHeader() {
     final session = _session;
-    return Container(
-      color: const Color(0xFF1976D2),
+    return Padding(
       padding: EdgeInsets.fromLTRB(
           20, MediaQuery.of(context).padding.top + 16, 20, 20),
-
       child: Row(
         children: [
           Expanded(
@@ -153,13 +157,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                      color: AppColors.textOnGrad),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   session?.outletName ?? '',
                   style: const TextStyle(
-                      fontSize: 13, color: Color(0xFFBBDEFB)),
+                      fontSize: 13,
+                      color: AppColors.textSubOnGrad),
                 ),
               ],
             ),
@@ -170,10 +175,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.25),
+                color: AppColors.glassWhite,
                 shape: BoxShape.circle,
                 border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.5), width: 2),
+                    color: AppColors.glassBorder, width: 2),
               ),
               child: Center(
                 child: Text(
@@ -181,7 +186,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                      color: AppColors.textOnGrad),
                 ),
               ),
             ),
@@ -193,31 +198,36 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Widget _buildCheckoutBar() {
     return Container(
-      color: Colors.white,
+      color: Colors.transparent,
       padding: EdgeInsets.fromLTRB(
           20, 12, 20, MediaQuery.of(context).padding.bottom + 12),
-      child: SizedBox(
+      child: GradientButton(
+        onPressed: _checkingOut ? null : _checkout,
         height: 52,
-        child: ElevatedButton.icon(
-          onPressed: _checkingOut ? null : _checkout,
-          icon: _checkingOut
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.white))
-              : const Icon(Icons.logout_rounded, size: 20),
-          label: Text(_checkingOut ? 'Memproses...' : 'Checkout',
-              style: const TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFFF9800),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            elevation: 0,
-          ),
-        ),
+        borderRadius: 14,
+        colors: const [AppColors.warningGlass, Color(0xFFFF6D00)],
+        child: _checkingOut
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: AppColors.textOnGrad),
+              )
+            : const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.logout_rounded,
+                      size: 20, color: AppColors.textOnGrad),
+                  SizedBox(width: 8),
+                  Text(
+                    'Checkout',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textOnGrad),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -227,10 +237,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.inbox_outlined, size: 56, color: Colors.grey[300]),
+          Icon(Icons.inbox_outlined,
+              size: 56,
+              color: AppColors.textOnGrad.withValues(alpha: 0.4)),
           const SizedBox(height: 12),
-          Text('Belum ada riwayat absensi',
-              style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+          const Text(
+            'Belum ada riwayat absensi',
+            style: TextStyle(color: AppColors.textSubOnGrad, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -254,19 +268,15 @@ class _AbsensiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hadir = item.status == 'hadir';
-    return Container(
+
+    // blurSigma 6 dipilih untuk menjaga performa pada list panjang.
+    // BackdropFilter dengan blur tinggi pada banyak item sekaligus
+    // menyebabkan repaint layer yang berat di GPU. Sigma 6 memberikan
+    // efek glass yang cukup terlihat tanpa membebani rendering per-frame.
+    return GlassCard(
+      blurSigma: 6,
+      borderRadius: 14,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Row(
         children: [
           Container(
@@ -274,15 +284,13 @@ class _AbsensiCard extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               color: hadir
-                  ? const Color(0xFFE8F5E9)
-                  : const Color(0xFFFCE4EC),
+                  ? AppColors.successGlass.withValues(alpha: 0.2)
+                  : AppColors.errorGlass.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               hadir ? Icons.check_rounded : Icons.close_rounded,
-              color: hadir
-                  ? const Color(0xFF43A047)
-                  : const Color(0xFFE53935),
+              color: hadir ? AppColors.successGlass : AppColors.errorGlass,
               size: 22,
             ),
           ),
@@ -291,21 +299,27 @@ class _AbsensiCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tanggal,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: Color(0xFF1A1A2E))),
+                Text(
+                  tanggal,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: AppColors.textOnGrad),
+                ),
                 if (hadir) ...[
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      const Icon(Icons.access_time_rounded,
-                          size: 12, color: Colors.grey),
+                      Icon(Icons.access_time_rounded,
+                          size: 12,
+                          color: AppColors.textSubOnGrad.withValues(alpha: 0.8)),
                       const SizedBox(width: 4),
-                      Text(item.jam,
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.grey)),
+                      Text(
+                        item.jam,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSubOnGrad),
+                      ),
                     ],
                   ),
                 ],
@@ -317,9 +331,14 @@ class _AbsensiCard extends StatelessWidget {
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: hadir
-                  ? const Color(0xFFE8F5E9)
-                  : const Color(0xFFFCE4EC),
+                  ? AppColors.successGlass.withValues(alpha: 0.2)
+                  : AppColors.errorGlass.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: hadir
+                    ? AppColors.successGlass.withValues(alpha: 0.5)
+                    : AppColors.errorGlass.withValues(alpha: 0.5),
+              ),
             ),
             child: Text(
               hadir ? 'Hadir' : 'Absen',
@@ -327,8 +346,8 @@ class _AbsensiCard extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: hadir
-                      ? const Color(0xFF43A047)
-                      : const Color(0xFFE53935)),
+                      ? AppColors.successGlass
+                      : AppColors.errorGlass),
             ),
           ),
         ],

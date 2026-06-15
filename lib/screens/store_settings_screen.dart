@@ -6,6 +6,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/store.dart';
 import '../services/store_service.dart';
+import '../widgets/app_theme.dart';
 import 'login_screen.dart';
 
 class StoreSettingsScreen extends StatefulWidget {
@@ -130,26 +131,39 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: !widget.isInitialSetup,
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(gradient: AppGradients.secondary),
+        ),
         title: Text(
           widget.isInitialSetup ? 'Setup Outlet' : 'Pengaturan Outlet',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 17,
-            color: Color(0xFF1A1A2E),
+            color: Colors.white,
           ),
         ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: ShadButton(
-              onPressed: _save,
-              size: ShadButtonSize.sm,
-              leading: const Icon(Icons.save, size: 14),
-              child: Text(
-                widget.isInitialSetup ? 'Simpan & Lanjut' : 'Simpan',
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: AppGradients.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ShadButton(
+                onPressed: _save,
+                size: ShadButtonSize.sm,
+                backgroundColor: Colors.transparent,
+                hoverBackgroundColor: Colors.transparent,
+                foregroundColor: Colors.white,
+                leading: const Icon(Icons.save, size: 14, color: Colors.white),
+                child: Text(
+                  widget.isInitialSetup ? 'Simpan & Lanjut' : 'Simpan',
+                ),
               ),
             ),
           ),
@@ -162,20 +176,34 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
               margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFE3F2FD),
-                borderRadius: BorderRadius.circular(10),
+                color: const Color(0xFFE8F4FD),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.gradSecStart.withValues(alpha: 0.35),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.gradSecStart.withValues(alpha: 0.10),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Row(
                 children: [
                   Icon(Icons.info_outline_rounded,
-                      size: 16, color: Color(0xFF1976D2)),
-                  SizedBox(width: 8),
+                      size: 18, color: AppColors.gradSecStart),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Atur informasi outlet sebelum login. '
                       'Tap di peta untuk set lokasi outlet.',
                       style: TextStyle(
-                          fontSize: 12, color: Color(0xFF1565C0)),
+                        fontSize: 12,
+                        color: Color(0xFF1565C0),
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -207,6 +235,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                         divisions: 9,
                         value: _radius,
                         label: '${_radius.toStringAsFixed(0)}m',
+                        activeColor: AppColors.gradSecEnd,
                         onChanged: (v) => setState(() => _radius = v),
                       ),
                     ),
@@ -277,21 +306,43 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                 Positioned(
                   right: 12,
                   bottom: 12,
-                  child: FloatingActionButton.small(
-                    onPressed: _isLoadingLocation ? null : _useMyLocation,
-                    tooltip: 'Gunakan lokasi saya',
-                    backgroundColor: const Color(0xFF1976D2),
-                    foregroundColor: Colors.white,
-                    child: _isLoadingLocation
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.my_location),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      gradient: _isLoadingLocation
+                          ? null
+                          : AppGradients.secondary,
+                      color: _isLoadingLocation
+                          ? const Color(0xFF1976D2)
+                          : null,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color:
+                              AppColors.gradSecStart.withValues(alpha: 0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: FloatingActionButton.small(
+                      onPressed: _isLoadingLocation ? null : _useMyLocation,
+                      tooltip: 'Gunakan lokasi saya',
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      child: _isLoadingLocation
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.my_location),
+                    ),
                   ),
                 ),
               ],

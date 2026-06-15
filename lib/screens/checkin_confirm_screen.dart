@@ -4,6 +4,10 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/attendance_record.dart';
 import '../models/session.dart';
 import '../services/attendance_service.dart';
+import '../widgets/app_theme.dart';
+import '../widgets/glass_card.dart';
+import '../widgets/gradient_button.dart';
+import '../widgets/gradient_scaffold.dart';
 
 class CheckinConfirmScreen extends StatefulWidget {
   final Session session;
@@ -48,21 +52,23 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    return GradientScaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_rounded,
-              color: Color(0xFF1A1A2E)),
+              color: AppColors.textOnGrad),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Konfirmasi Absensi',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 17,
-                color: Color(0xFF1A1A2E))),
+        title: const Text(
+          'Konfirmasi Absensi',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: AppColors.textOnGrad,
+          ),
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -70,93 +76,102 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Icon
+            // Ikon konfirmasi dalam GlassCard bulat dengan aksen hijau
             Center(
-              child: Container(
-                width: 88,
-                height: 88,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFE8F5E9),
-                  shape: BoxShape.circle,
+              child: GlassCard(
+                padding: const EdgeInsets.all(20),
+                borderRadius: 44,
+                color: const Color(0x3300C853),
+                child: const Icon(
+                  Icons.how_to_reg_rounded,
+                  size: 48,
+                  color: AppColors.textOnGrad,
                 ),
-                child: const Icon(Icons.how_to_reg_rounded,
-                    size: 48, color: Color(0xFF43A047)),
               ),
             ),
             const SizedBox(height: 28),
 
-            // Nama
+            // Nama karyawan
             Text(
               widget.session.employeeName,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A1A2E)),
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textOnGrad,
+              ),
             ),
             const SizedBox(height: 6),
 
-            // Outlet
+            // Nama outlet
             Text(
               widget.session.outletName,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 15, color: Colors.grey),
+                fontSize: 15,
+                color: AppColors.textSubOnGrad,
+              ),
             ),
             const SizedBox(height: 32),
 
-            // Pertanyaan
-            const Text(
-              'Apakah anda yakin absensi?',
-              textAlign: TextAlign.center,
-              style: TextStyle(
+            // Pertanyaan konfirmasi dalam GlassCard persegi panjang
+            GlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              child: const Text(
+                'Apakah anda yakin absensi?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A1A2E)),
+                  color: AppColors.textOnGrad,
+                ),
+              ),
             ),
             const SizedBox(height: 36),
 
-            // Tombol Ya
-            SizedBox(
+            // Tombol Ya — GradientButton dengan gradien hijau
+            GradientButton(
               height: 52,
-              child: ElevatedButton(
-                onPressed: _saving ? null : _confirm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF43A047),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Text('Ya',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
+              borderRadius: 14,
+              colors: const [AppColors.successGlass, Color(0xFF00E676)],
+              onPressed: _saving ? null : _confirm,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text(
+                      'Ya',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textOnGrad,
+                      ),
+                    ),
             ),
             const SizedBox(height: 12),
 
-            // Tombol Tidak
-            SizedBox(
-              height: 52,
-              child: OutlinedButton(
-                onPressed: _saving
-                    ? null
-                    : () => Navigator.pop(context, false),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.grey[700],
-                  side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+            // Tombol Tidak — GlassCard tipis sebagai tombol sekunder
+            GlassCard(
+              padding: EdgeInsets.zero,
+              borderRadius: 14,
+              child: SizedBox(
+                height: 52,
+                child: InkWell(
+                  onTap: _saving ? null : () => Navigator.pop(context, false),
+                  borderRadius: BorderRadius.circular(14),
+                  child: const Center(
+                    child: Text(
+                      'Tidak',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xB3FFFFFF),
+                      ),
+                    ),
+                  ),
                 ),
-                child: const Text('Tidak',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w500)),
               ),
             ),
           ],
