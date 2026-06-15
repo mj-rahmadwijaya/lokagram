@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/session.dart';
 
@@ -36,9 +37,10 @@ class SessionService {
 
   String _generateId() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rng = Random.secure();
     final buf = StringBuffer();
     for (var i = 0; i < 16; i++) {
-      buf.write(chars[DateTime.now().microsecondsSinceEpoch % chars.length]);
+      buf.write(chars[rng.nextInt(chars.length)]);
     }
     return buf.toString();
   }
