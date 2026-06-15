@@ -6,11 +6,17 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/store.dart';
 import '../services/store_service.dart';
+import 'login_screen.dart';
 
 class StoreSettingsScreen extends StatefulWidget {
   final Store? initialStore;
+  final bool isInitialSetup;
 
-  const StoreSettingsScreen({super.key, this.initialStore});
+  const StoreSettingsScreen({
+    super.key,
+    this.initialStore,
+    this.isInitialSetup = false,
+  });
 
   @override
   State<StoreSettingsScreen> createState() => _StoreSettingsScreenState();
@@ -95,7 +101,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
     if (name.isEmpty) {
       ShadToaster.of(context).show(
         const ShadToast.destructive(
-          description: Text('Nama store tidak boleh kosong'),
+          description: Text('Nama outlet tidak boleh kosong'),
         ),
       );
       return;
@@ -106,14 +112,35 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
       lng: _pinPosition.longitude,
       radiusMeters: _radius,
     ));
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    if (widget.isInitialSetup) {
+      Navigator.of(context).pushReplacement(PageRouteBuilder(
+        pageBuilder: (context, a, b) => const LoginScreen(),
+        transitionsBuilder: (context, anim, b, child) =>
+            FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 300),
+      ));
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Pengaturan Store'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: !widget.isInitialSetup,
+        title: Text(
+          widget.isInitialSetup ? 'Setup Outlet' : 'Pengaturan Outlet',
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 17,
+            color: Color(0xFF1A1A2E),
+          ),
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -121,13 +148,40 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
               onPressed: _save,
               size: ShadButtonSize.sm,
               leading: const Icon(Icons.save, size: 14),
-              child: const Text('Simpan'),
+              child: Text(
+                widget.isInitialSetup ? 'Simpan & Lanjut' : 'Simpan',
+              ),
             ),
           ),
         ],
       ),
       body: Column(
         children: [
+          if (widget.isInitialSetup) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      size: 16, color: Color(0xFF1976D2)),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Atur informasi outlet sebelum login. '
+                      'Tap di peta untuk set lokasi outlet.',
+                      style: TextStyle(
+                          fontSize: 12, color: Color(0xFF1565C0)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Column(
@@ -135,7 +189,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
               children: [
                 ShadInput(
                   controller: _nameController,
-                  placeholder: const Text('Nama Store'),
+                  placeholder: const Text('Nama Outlet'),
                   leading: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8),
                     child: Icon(Icons.store, size: 18, color: Colors.grey),
@@ -171,7 +225,7 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Text(
-              'Tap di peta untuk set lokasi store',
+              'Tap di peta untuk set lokasi outlet',
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ),
@@ -197,8 +251,8 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                           point: _pinPosition,
                           radius: _radius,
                           useRadiusInMeter: true,
-                          color: Colors.blue.withValues(alpha: 0.15),
-                          borderColor: Colors.blue,
+                          color: const Color(0xFF1976D2).withValues(alpha: 0.15),
+                          borderColor: const Color(0xFF1976D2),
                           borderStrokeWidth: 2,
                         ),
                       ],
@@ -211,8 +265,8 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                           height: 40,
                           alignment: Alignment.topCenter,
                           child: const Icon(
-                            Icons.store,
-                            color: Colors.blue,
+                            Icons.store_rounded,
+                            color: Color(0xFF1976D2),
                             size: 40,
                           ),
                         ),
@@ -226,6 +280,8 @@ class _StoreSettingsScreenState extends State<StoreSettingsScreen> {
                   child: FloatingActionButton.small(
                     onPressed: _isLoadingLocation ? null : _useMyLocation,
                     tooltip: 'Gunakan lokasi saya',
+                    backgroundColor: const Color(0xFF1976D2),
+                    foregroundColor: Colors.white,
                     child: _isLoadingLocation
                         ? const SizedBox(
                             width: 20,

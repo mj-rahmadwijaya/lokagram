@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import '../models/session.dart';
+import '../models/store.dart';
 import '../services/api_service.dart';
 import '../services/session_service.dart';
+import '../services/store_service.dart';
 import 'main_screen.dart';
+import 'store_settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,13 +21,37 @@ class _LoginScreenState extends State<LoginScreen> {
   final _pinCtrl = TextEditingController();
   final _apiService = ApiService();
   final _sessionService = SessionService();
+  final _storeService = StoreService();
+
+  Store? _store;
   bool _obscure = true;
   bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStore();
+  }
 
   @override
   void dispose() {
     _pinCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadStore() async {
+    final store = await _storeService.loadStore();
+    if (mounted) setState(() => _store = store);
+  }
+
+  Future<void> _openStoreSettings() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StoreSettingsScreen(initialStore: _store),
+      ),
+    );
+    _loadStore();
   }
 
   Future<void> _login() async {
@@ -92,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
       staffId: karyawan.staffId,
       outletId: karyawan.outletId,
       uniqueId: karyawan.uniqueId,
-      employeeName: 'Budi Santoso', // dari profile API, sementara hardcode
+      employeeName: 'Budi Santoso',
       phone: '-',
       outletName: outlet.name,
       outletAddress: outlet.alamat,
@@ -197,7 +224,45 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 6),
               Text('Gunakan PIN yang diberikan oleh admin.',
                   style: TextStyle(fontSize: 14, color: Colors.grey[500])),
-              const SizedBox(height: 36),
+              const SizedBox(height: 16),
+
+              // Info outlet
+              if (_store != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFE0E0E0)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.store_rounded,
+                          size: 16, color: Color(0xFF1976D2)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _store!.name,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: _openStoreSettings,
+                        child: const Text(
+                          'Ubah Outlet',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF1976D2),
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 28),
               const Text('PIN',
                   style: TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w600)),

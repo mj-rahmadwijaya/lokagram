@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import '../services/session_service.dart';
+import '../services/store_service.dart';
 import 'login_screen.dart';
 import 'main_screen.dart';
+import 'store_settings_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -33,6 +35,21 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _navigate() async {
     await Future.delayed(const Duration(milliseconds: 2600));
     if (!mounted) return;
+
+    final store = await StoreService().loadStore();
+    if (!mounted) return;
+
+    if (store == null) {
+      Navigator.of(context).pushReplacement(PageRouteBuilder(
+        pageBuilder: (context, a, b) =>
+            const StoreSettingsScreen(isInitialSetup: true),
+        transitionsBuilder: (context, anim, b, child) =>
+            FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 400),
+      ));
+      return;
+    }
+
     final session = await SessionService().loadSession();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(PageRouteBuilder(
@@ -93,5 +110,4 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
   }
-
 }

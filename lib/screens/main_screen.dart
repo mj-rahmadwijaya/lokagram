@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../models/session.dart';
+import '../models/store.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import '../services/session_service.dart';
+import '../services/store_service.dart';
 import 'barcode_scan_screen.dart';
 import 'checkin_confirm_screen.dart';
 import 'history_screen.dart';
@@ -23,15 +25,16 @@ class _MainScreenState extends State<MainScreen> {
   final _sessionService = SessionService();
   final _apiService = ApiService();
   final _locService = LocationService();
+  final _storeService = StoreService();
 
   Session? _session;
+  Store? _store;
   Position? _position;
   Timer? _clockTimer;
   DateTime _now = DateTime.now();
   bool _loggingOut = false;
   bool _locating = true;
-
-  static const _checkinRadius = 100.0;
+  bool _isFakeGps = false;
 
   static const _hari = [
     'Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'
@@ -45,6 +48,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _loadSession();
+    _loadStore();
     _startClock();
     _startLocation();
   }
@@ -58,6 +62,11 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _loadSession() async {
     final s = await _sessionService.loadSession();
     if (mounted) setState(() => _session = s);
+  }
+
+  Future<void> _loadStore() async {
+    final s = await _storeService.loadStore();
+    if (mounted) setState(() => _store = s);
   }
 
   void _startClock() {
@@ -74,39 +83,51 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
 
-    // Last known position → instant fill
     final last = await _locService.getLastKnownPosition();
     if (last != null && mounted) {
-      setState(() { _position = last; _locating = false; });
+      if (last.isMocked) {
+        setState(() { _isFakeGps = true; _locating = false; });
+      } else {
+        setState(() { _position = last; _locating = false; });
+      }
     }
 
-    // Live stream dengan distanceFilter:0 → update tiap pergerakan
     _locService.positionStream().listen((p) {
-      if (mounted) setState(() { _position = p; _locating = false; });
+      if (!mounted) return;
+      if (p.isMocked) {
+        setState(() { _isFakeGps = true; _locating = false; });
+      } else {
+        setState(() { _isFakeGps = false; _position = p; _locating = false; });
+      }
     });
 
-    // Fallback: low-accuracy cepat jika last known kosong
     if (last == null) {
       final net = await _locService.getNetworkPosition();
       if (net != null && mounted && _position == null) {
-        setState(() { _position = net; _locating = false; });
+        if (net.isMocked) {
+          setState(() { _isFakeGps = true; _locating = false; });
+        } else {
+          setState(() { _position = net; _locating = false; });
+        }
       }
     }
   }
 
   double? get _distanceMeters {
-    final session = _session;
+    final store = _store;
     final pos = _position;
-    if (session == null || pos == null) return null;
+    if (store == null || pos == null) return null;
     return Geolocator.distanceBetween(
       pos.latitude, pos.longitude,
-      session.outletLat, session.outletLng,
+      store.lat, store.lng,
     );
   }
 
   bool get _isInRange {
+    final store = _store;
     final d = _distanceMeters;
-    return d != null && d <= _checkinRadius;
+    if (store == null || d == null) return false;
+    return d <= store.radiusMeters;
   }
 
   String _clockStr() {
@@ -121,10 +142,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   String _distanceStr() {
+    if (_isFakeGps) return 'Fake GPS terdeteksi!';
     if (_locating || _position == null) return 'Mengukur jarak...';
     final d = _distanceMeters;
     if (d == null) return 'Mengukur jarak...';
-    return '${d.toStringAsFixed(0)}m dari outlet (radius ${_checkinRadius.toInt()}m)';
+    final radius = _store?.radiusMeters.toInt() ?? 100;
+    return '${d.toStringAsFixed(0)}m dari outlet (radius ${radius}m)';
   }
 
   Future<void> _checkin() async {
@@ -134,20 +157,16 @@ class _MainScreenState extends State<MainScreen> {
     );
     if (barcode == null || !mounted) return;
 
-    // Validasi barcode vs session
-    // Format dummy barcode: "staffId|outletId|uniqueId"
     final session = await _sessionService.loadSession();
     final parts = barcode.split('|');
 
     if (session == null) {
-      // Belum ada session → tawaran simpan
       final ok = await _showConfirm(
         title: 'Simpan data ke device?',
         body: 'Data dari barcode akan disimpan di device ini.',
       );
       if (!mounted) return;
       if (ok != true) return;
-      // Data dari barcode (format dummy), langsung lanjut
     } else {
       if (parts.length == 3) {
         final cocok = parts[0] == session.staffId &&
@@ -162,7 +181,6 @@ class _MainScreenState extends State<MainScreen> {
           return;
         }
       }
-      // Data cocok atau format tidak dikenali → lanjut konfirmasi
     }
 
     if (!mounted) return;
@@ -255,7 +273,7 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          _session?.outletName ?? 'Attendance',
+          _store?.name ?? _session?.outletName ?? 'Attendance',
           style: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 17,
@@ -277,130 +295,174 @@ class _MainScreenState extends State<MainScreen> {
                 ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Logo
-            Center(
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.event_available_rounded,
-                    size: 56, color: Color(0xFF1976D2)),
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Jarak
-            Builder(builder: (context) {
-              final loading = _locating || _position == null;
-              final inRange = !loading && _isInRange;
-              final outRange = !loading && !_isInRange;
-              final pillColor = loading
-                  ? Colors.grey[100]!
-                  : inRange
-                      ? const Color(0xFFE8F5E9)
-                      : const Color(0xFFFCE4EC);
-              final iconColor = loading
-                  ? Colors.grey
-                  : inRange
-                      ? const Color(0xFF43A047)
-                      : const Color(0xFFE53935);
-              final textColor = iconColor;
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: pillColor,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 6,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (loading)
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.grey),
-                      )
-                    else
-                      Icon(
-                        outRange
-                            ? Icons.location_off_rounded
-                            : Icons.location_on_rounded,
-                        size: 16,
-                        color: iconColor,
-                      ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _distanceStr(),
+      body: Column(
+        children: [
+          // Banner fake GPS
+          if (_isFakeGps)
+            Container(
+              color: const Color(0xFFE53935),
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_rounded,
+                      color: Colors.white, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Fake GPS terdeteksi! Matikan aplikasi pemalsuan lokasi.',
                       style: TextStyle(
-                          fontSize: 13,
-                          color: textColor,
-                          fontWeight: FontWeight.w500),
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600),
                     ),
-                  ],
-                ),
-              );
-            }),
-            const SizedBox(height: 28),
-
-            // Jam
-            Text(
-              _clockStr(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 52,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
-                fontFeatures: [FontFeature.tabularFigures()],
-                letterSpacing: 2,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 8),
 
-            // Tanggal
-            Text(
-              _dateStr(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 48),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Logo
+                  Center(
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFE3F2FD),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.event_available_rounded,
+                          size: 56, color: Color(0xFF1976D2)),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
 
-            // Tombol Checkin
-            SizedBox(
-              height: 60,
-              child: ElevatedButton.icon(
-                onPressed: _isInRange ? _checkin : null,
-                icon: const Icon(Icons.qr_code_scanner_rounded, size: 22),
-                label: const Text('Checkin',
-                    style: TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1976D2),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
-                ),
+                  // Pill jarak / status GPS
+                  Builder(builder: (context) {
+                    final pillColor = _isFakeGps
+                        ? const Color(0xFFFCE4EC)
+                        : (_locating || _position == null)
+                            ? Colors.grey[100]!
+                            : _isInRange
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFCE4EC);
+                    final iconColor = _isFakeGps
+                        ? const Color(0xFFE53935)
+                        : (_locating || _position == null)
+                            ? Colors.grey
+                            : _isInRange
+                                ? const Color(0xFF43A047)
+                                : const Color(0xFFE53935);
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: pillColor,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_locating && !_isFakeGps)
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.grey),
+                            )
+                          else
+                            Icon(
+                              _isFakeGps
+                                  ? Icons.warning_rounded
+                                  : _isInRange
+                                      ? Icons.location_on_rounded
+                                      : Icons.location_off_rounded,
+                              size: 16,
+                              color: iconColor,
+                            ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _distanceStr(),
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: iconColor,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 28),
+
+                  // Jam
+                  Text(
+                    _clockStr(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 52,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A1A2E),
+                      fontFeatures: [FontFeature.tabularFigures()],
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Tanggal
+                  Text(
+                    _dateStr(),
+                    textAlign: TextAlign.center,
+                    style:
+                        const TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 48),
+
+                  // Tombol Checkin
+                  SizedBox(
+                    height: 60,
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          (!_isFakeGps && _isInRange) ? _checkin : null,
+                      icon: const Icon(Icons.qr_code_scanner_rounded,
+                          size: 22),
+                      label: Text(
+                        _isFakeGps
+                            ? 'Fake GPS Aktif'
+                            : 'Checkin',
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1976D2),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                        disabledBackgroundColor:
+                            const Color(0xFFBDBDBD),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

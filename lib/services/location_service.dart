@@ -1,5 +1,4 @@
 import 'package:geolocator/geolocator.dart';
-import '../models/store.dart';
 
 class LocationService {
   Future<bool> ensurePermission() async {
@@ -35,13 +34,5 @@ class LocationService {
         distanceFilter: 0,
       ),
     );
-  }
-
-  double distanceTo(double lat, double lng, Store store) {
-    return Geolocator.distanceBetween(lat, lng, store.lat, store.lng);
-  }
-
-  bool isInsideZone(double lat, double lng, Store store) {
-    return distanceTo(lat, lng, store) <= store.radiusMeters;
   }
 }
